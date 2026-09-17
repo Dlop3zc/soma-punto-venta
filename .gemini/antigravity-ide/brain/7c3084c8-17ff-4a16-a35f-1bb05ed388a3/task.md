@@ -1,0 +1,16 @@
+- [x] Setup Project
+  - [x] Initialize Vite React TS app
+  - [x] Install Tailwind CSS and configure it
+  - [x] Install Zustand and Lucide React
+- [x] Create Mock Data
+  - [x] Create `src/data/mockProducts.ts`
+- [x] State Management
+  - [x] Create `src/store/useCartStore.ts`
+- [x] UI Components
+  - [x] Create `src/components/ProductCatalog.tsx`
+  - [x] Create `src/components/Cart.tsx`
+  - [x] Create `src/components/CheckoutModal.tsx`
+  - [x] Update `src/App.tsx` layout
+  - [x] Add global styles in `src/index.css`
+- [x] Verification
+  - [x] Verify build and layout
