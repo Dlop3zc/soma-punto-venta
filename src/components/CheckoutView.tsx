@@ -1,0 +1,125 @@
+import { useCartStore } from '../store/useCartStore';
+import { useAuthStore } from '../store/useAuthStore';
+import { useState } from 'react';
+import CheckoutModal from './CheckoutModal';
+import SplitBillModal from './SplitBillModal';
+
+export default function CheckoutView() {
+  const { orders, setActiveOrder } = useCartStore();
+  const { activeUser } = useAuthStore();
+  const [checkoutOrderId, setCheckoutOrderId] = useState<string | null>(null);
+  const [splitBillOrderId, setSplitBillOrderId] = useState<string | null>(null);
+
+  // Consider all open accounts, filter if waiter
+  const openOrders = activeUser?.role === 'waiter' 
+    ? orders.filter(o => o.waiter === activeUser.name)
+    : orders;
+
+  const handleCheckout = (orderId: string) => {
+    setActiveOrder(orderId);
+    setCheckoutOrderId(orderId);
+  };
+
+  const handleSplitBill = (orderId: string) => {
+    setActiveOrder(orderId);
+    setSplitBillOrderId(orderId);
+  };
+
+  return (
+    <div className="flex-1 h-full bg-zinc-900 flex flex-col overflow-hidden">
+      <div className="p-6 border-b border-zinc-800 bg-zinc-950 flex items-center justify-between">
+        <h1 className="text-3xl font-bold text-white flex items-center gap-3">
+          <span>💰</span> Módulo de Caja
+        </h1>
+        <div className="text-zinc-400 font-medium">
+          {openOrders.length} cuenta(s) abierta(s)
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-6">
+        {openOrders.length === 0 ? (
+          <div className="h-full flex flex-col items-center justify-center text-zinc-500 gap-4">
+            <span className="text-6xl">🧾</span>
+            <p className="text-2xl font-medium">No hay cuentas abiertas</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {openOrders.map(order => (
+              <div 
+                key={order.id} 
+                className="bg-zinc-800 rounded-2xl overflow-hidden flex flex-col border border-zinc-700 shadow-xl"
+              >
+                <div className="p-4 bg-blue-600/20 border-b border-blue-500/30 flex justify-between items-center">
+                  <div>
+                    <h2 className="text-xl font-bold text-white">{order.name}</h2>
+                    <p className="text-blue-400 text-sm font-medium">👤 {order.waiter}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-zinc-400">Total</p>
+                    <p className="text-xl font-bold text-emerald-400">${order.total.toFixed(2)}</p>
+                  </div>
+                </div>
+                
+                <div className="flex-1 p-4 overflow-y-auto min-h-[150px]">
+                  <ul className="space-y-3">
+                    {order.items.map(item => (
+                      <li key={item.cartItemId} className="flex justify-between items-start border-b border-zinc-700/50 pb-2 last:border-0">
+                        <div className="flex-1">
+                          <span className="font-bold text-zinc-100">{item.quantity}x</span>
+                          <span className="text-zinc-300 ml-2">{item.name}</span>
+                          <div className="text-xs text-zinc-500 mt-1">
+                            {item.status === 'nuevo' && 'Tomando orden...'}
+                            {item.status === 'preparando' && 'En cocina...'}
+                            {item.status === 'listo' && 'Entregado'}
+                          </div>
+                        </div>
+                        <span className="font-medium text-emerald-400/80">
+                          ${(item.price * item.quantity).toFixed(2)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                
+                <div className="p-4 bg-zinc-900 border-t border-zinc-700 flex flex-col gap-3">
+                  <button
+                    onClick={() => handleSplitBill(order.id)}
+                    disabled={order.items.length === 0}
+                    className={`w-full py-3 rounded-xl text-lg font-bold transition-colors flex items-center justify-center gap-2 ${
+                      order.items.length === 0
+                        ? 'bg-zinc-800 text-zinc-600 cursor-not-allowed'
+                        : 'bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-600 text-zinc-300 border border-zinc-700'
+                    }`}
+                  >
+                    <span>✂️</span> Separar Cuenta
+                  </button>
+                  <button
+                    onClick={() => handleCheckout(order.id)}
+                    disabled={order.items.length === 0}
+                    className={`w-full py-4 rounded-xl text-xl font-bold transition-colors flex items-center justify-center gap-2 ${
+                      order.items.length === 0
+                        ? 'bg-zinc-800 text-zinc-600 cursor-not-allowed'
+                        : 'bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white shadow-lg shadow-emerald-600/20'
+                    }`}
+                  >
+                    <span>💳</span> Cobrar Total
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <CheckoutModal
+        isOpen={!!checkoutOrderId}
+        onClose={() => setCheckoutOrderId(null)}
+      />
+
+      <SplitBillModal
+        isOpen={!!splitBillOrderId}
+        onClose={() => setSplitBillOrderId(null)}
+      />
+    </div>
+  );
+}

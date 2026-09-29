@@ -11,20 +11,24 @@ export default function CheckoutModal({ isOpen, onClose }: CheckoutModalProps) {
   const { orders, activeOrderId, payActiveOrder } = useCartStore();
   const [view, setView] = useState<'selection' | 'cash'>('selection');
   const [cashTendered, setCashTendered] = useState<string>('');
+  const [discountAmount, setDiscountAmount] = useState<string>('');
 
   const activeOrder = orders.find(o => o.id === activeOrderId);
-  const total = activeOrder?.total || 0;
+  const originalTotal = activeOrder?.total || 0;
+  const parsedDiscount = parseFloat(discountAmount) || 0;
+  const total = Math.max(0, originalTotal - parsedDiscount);
 
   if (!isOpen) return null;
 
   const handleClose = () => {
     setView('selection');
     setCashTendered('');
+    setDiscountAmount('');
     onClose();
   };
 
   const handleCardPayment = () => {
-    payActiveOrder('Tarjeta');
+    payActiveOrder('Tarjeta', parsedDiscount);
     handleClose();
   };
 
@@ -32,7 +36,7 @@ export default function CheckoutModal({ isOpen, onClose }: CheckoutModalProps) {
     const tendered = parseFloat(cashTendered);
     if (isNaN(tendered) || tendered < total) return;
     
-    payActiveOrder('Efectivo', tendered, tendered - total);
+    payActiveOrder('Efectivo', parsedDiscount, tendered, tendered - total);
     handleClose();
   };
 
@@ -40,7 +44,18 @@ export default function CheckoutModal({ isOpen, onClose }: CheckoutModalProps) {
     <>
       <div className="p-10 text-center border-b border-zinc-800">
         <h2 className="text-4xl font-bold text-zinc-400 mb-4">Total a Cobrar</h2>
-        <div className="text-7xl font-extrabold text-white">${total.toFixed(2)}</div>
+        <div className="text-7xl font-extrabold text-white mb-6">${total.toFixed(2)}</div>
+        
+        <div className="flex flex-col items-center gap-2 max-w-sm mx-auto">
+          <label className="text-zinc-400 font-medium">Aplicar Descuento / Promoción ($)</label>
+          <input 
+            type="number"
+            value={discountAmount}
+            onChange={(e) => setDiscountAmount(e.target.value)}
+            className="w-full bg-zinc-800 border-2 border-zinc-700 text-white text-2xl font-bold rounded-xl py-3 px-4 text-center focus:outline-none focus:border-emerald-500 transition-colors"
+            placeholder="0.00"
+          />
+        </div>
       </div>
       
       <div className="p-10 grid grid-cols-2 gap-6 bg-zinc-950">

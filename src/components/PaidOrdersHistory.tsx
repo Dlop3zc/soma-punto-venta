@@ -19,7 +19,7 @@ export default function PaidOrdersHistory({ isOpen, onClose }: { isOpen: boolean
   }, [paidOrders]);
 
   const handleClearData = () => {
-    if (window.confirm("⚠️ ADVERTENCIA: Estás a punto de hacer el Corte de Caja y borrar TODAS las ventas y cuentas abiertas del dispositivo.\n\n¿Ya descargaste el Reporte CSV?\n\nPresiona OK para borrar todo.")) {
+    if (window.confirm("⚠️ ADVERTENCIA: Estás a punto de borrar TODAS las cuentas abiertas y comandas.\n\nEl historial de ventas (almacenamiento continuo) se mantendrá.\n\nPresiona OK para borrar las cuentas abiertas.")) {
       clearData();
       onClose();
     }
@@ -48,9 +48,9 @@ export default function PaidOrdersHistory({ isOpen, onClose }: { isOpen: boolean
             <button 
               onClick={handleClearData}
               className="px-4 py-2 bg-red-600/20 text-red-500 hover:bg-red-600 hover:text-white font-bold rounded-xl transition-colors border border-red-500/30"
-              title="Borrar todos los datos y reiniciar la caja"
+              title="Borrar cuentas abiertas y comandas"
             >
-              Corte (Limpiar Caja)
+              Corte (Limpiar Cuentas)
             </button>
             <button 
               onClick={onClose}
