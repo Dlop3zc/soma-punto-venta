@@ -1,13 +1,19 @@
 import { create } from 'zustand';
 import { db } from '../firebase';
-import { collection, doc, setDoc, updateDoc, onSnapshot, writeBatch, getDocs } from 'firebase/firestore';
+import {
+  collection, doc, setDoc, updateDoc, onSnapshot, writeBatch, getDocs,
+  runTransaction, increment, type Transaction,
+} from 'firebase/firestore';
 import type { Product } from '../data/mockProducts';
 import { useAuthStore } from './useAuthStore';
+import { useInventoryStore } from './useInventoryStore';
+import { getAvailability, reservedQuantity } from '../utils/stock';
 
 export interface CartItem extends Product {
   cartItemId: string;
   quantity: number;
   status: 'nuevo' | 'preparando' | 'listo';
+  note?: string;
   sentToKitchenAt?: number;
   finishedAt?: number;
 }
@@ -21,12 +27,26 @@ export interface Order {
   createdAt: number;
 }
 
+export type PaymentMethod = 'Efectivo' | 'Tarjeta';
+
 export interface PaidOrder extends Order {
-  paymentMethod: 'Efectivo' | 'Tarjeta';
+  paymentMethod: PaymentMethod;
   paidAt: number;
+  paidBy?: string;
   cashTendered?: number;
   change?: number;
   discount?: number;
+  tip?: number;        // propina, no forma parte de `total` (ventas)
+  tipPercent?: number; // porcentaje elegido cuando la propina se calculó por %
+}
+
+export interface PaymentInput {
+  method: PaymentMethod;
+  discount: number;
+  tip: number;
+  tipPercent?: number;
+  cashTendered?: number;
+  change?: number;
 }
 
 export interface Alert {
@@ -39,19 +59,25 @@ export interface Alert {
   createdAt: number;
 }
 
+export type AddToCartResult = 'ok' | 'no-order' | 'out-of-stock';
+
 interface CartState {
   orders: Order[];
   paidOrders: PaidOrder[];
   alerts: Alert[];
   activeOrderId: string | null;
   lastCutTime: number;
-  
+
   initListeners: () => () => void;
-  createOrder: () => Promise<string>;
+  createOrder: (name: string) => Promise<string>;
+  renameOrder: (orderId: string, name: string) => Promise<void>;
+  deleteEmptyOrder: (orderId: string) => Promise<void>;
   setActiveOrder: (id: string) => void;
-  addToCart: (product: Product) => Promise<void>;
-  updateQuantity: (cartItemId: string, delta: number) => Promise<void>;
-  payActiveOrder: (method: 'Efectivo' | 'Tarjeta', discount?: number, cashTendered?: number, change?: number) => Promise<void>;
+  addToCart: (product: Product) => Promise<AddToCartResult>;
+  updateQuantity: (cartItemId: string, delta: number) => Promise<AddToCartResult>;
+  setItemNote: (cartItemId: string, note: string) => Promise<void>;
+  removeSentItem: (orderId: string, cartItemId: string, quantity: number, restock: boolean) => Promise<void>;
+  payOrder: (orderId: string, payment: PaymentInput) => Promise<PaidOrder | null>;
   splitOrder: (originalOrderId: string, itemsToMove: { id: string, quantity: number }[]) => Promise<void>;
   sendToKitchen: (orderId: string) => Promise<void>;
   markAsReady: (orderId: string) => Promise<void>;
@@ -60,6 +86,53 @@ interface CartState {
 }
 
 const generateOrderId = () => Math.random().toString(36).substr(2, 9);
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+const calcTotal = (items: CartItem[]) =>
+  round2(items.reduce((sum, item) => sum + item.price * item.quantity, 0));
+
+// Firestore no acepta campos `undefined`; el round-trip JSON los elimina.
+const clean = <T,>(value: T): T => JSON.parse(JSON.stringify(value));
+
+const currentUserName = () => useAuthStore.getState().activeUser?.name || 'Desconocido';
+
+// Lee la orden dentro de una transacción, aplica `mutate` sobre una copia y la guarda.
+// Así dos dispositivos editando la misma cuenta no se pisan los cambios.
+async function mutateOrder(
+  orderId: string,
+  mutate: (order: Order, tx: Transaction) => void,
+) {
+  await runTransaction(db, async (tx) => {
+    const ref = doc(db, 'orders', orderId);
+    const snap = await tx.get(ref);
+    if (!snap.exists()) throw new Error('La cuenta ya no existe.');
+    const order = clean(snap.data() as Order);
+    mutate(order, tx);
+    order.total = calcTotal(order.items);
+    tx.update(ref, { items: clean(order.items), total: order.total });
+  });
+}
+
+// Descuenta del inventario las piezas de los productos con control de stock.
+function consumeStock(tx: Transaction, items: CartItem[]) {
+  const { getRecord } = useInventoryStore.getState();
+  const byProduct: Record<string, number> = {};
+  items.forEach(item => {
+    if (getRecord(item.id).tracked) {
+      byProduct[item.id] = (byProduct[item.id] || 0) + item.quantity;
+    }
+  });
+  Object.entries(byProduct).forEach(([productId, qty]) => {
+    tx.set(doc(db, 'inventory', productId), { stock: increment(-qty), updatedAt: Date.now() }, { merge: true });
+  });
+}
+
+function hasStockFor(productId: string, orders: Order[]): boolean {
+  const record = useInventoryStore.getState().getRecord(productId);
+  const { status } = getAvailability(record, reservedQuantity(orders, productId));
+  return status === 'ok' || status === 'low';
+}
 
 export const useCartStore = create<CartState>((set, get) => ({
 
@@ -120,171 +193,182 @@ export const useCartStore = create<CartState>((set, get) => ({
     };
   },
 
-  createOrder: async () => {
+  createOrder: async (name) => {
     const id = generateOrderId();
-    const currentOrdersCount = get().orders.length + get().paidOrders.length;
-    const activeUser = useAuthStore.getState().activeUser;
-    const waiter = activeUser ? activeUser.name : 'Desconocido';
-    
     const newOrder: Order = {
       id,
-      name: `Cuenta ${currentOrdersCount + 1}`,
-      waiter,
+      name: name.trim(),
+      waiter: currentUserName(),
       items: [],
       total: 0,
       createdAt: Date.now(),
     };
-    
-    set({ activeOrderId: id }); // Set active locally immediately
+
     await setDoc(doc(db, 'orders', id), newOrder);
+    set({ activeOrderId: id });
     return id;
+  },
+
+  renameOrder: async (orderId, name) => {
+    await updateDoc(doc(db, 'orders', orderId), { name: name.trim() });
+  },
+
+  deleteEmptyOrder: async (orderId) => {
+    await runTransaction(db, async (tx) => {
+      const ref = doc(db, 'orders', orderId);
+      const snap = await tx.get(ref);
+      if (!snap.exists()) return;
+      if ((snap.data() as Order).items.length > 0) {
+        throw new Error('Solo se pueden eliminar cuentas vacías.');
+      }
+      tx.delete(ref);
+    });
   },
 
   setActiveOrder: (id) => set({ activeOrderId: id }),
 
   addToCart: async (product) => {
-    let currentOrderId = get().activeOrderId;
-    const orders = get().orders;
-    const activeUser = useAuthStore.getState().activeUser;
-    const waiter = activeUser ? activeUser.name : 'Desconocido';
+    const { activeOrderId, orders } = get();
+    if (!activeOrderId || !orders.some(o => o.id === activeOrderId)) return 'no-order';
+    if (!hasStockFor(product.id, orders)) return 'out-of-stock';
 
-    let orderIndex = orders.findIndex(o => o.id === currentOrderId);
-    let order: Order;
-
-    if (!currentOrderId || orderIndex === -1) {
-      currentOrderId = generateOrderId();
-      order = {
-        id: currentOrderId,
-        name: `Cuenta ${orders.length + get().paidOrders.length + 1}`,
-        waiter,
-        items: [],
-        total: 0,
-        createdAt: Date.now(),
-      };
-      set({ activeOrderId: currentOrderId });
-    } else {
-      order = JSON.parse(JSON.stringify(orders[orderIndex]));
-    }
-
-    const existingItemIndex = order.items.findIndex((item: CartItem) => item.id === product.id && item.status === 'nuevo');
-
-    if (existingItemIndex >= 0) {
-      order.items[existingItemIndex].quantity += 1;
-    } else {
-      order.items.push({ 
-        ...product, 
-        cartItemId: generateOrderId(),
-        quantity: 1,
-        status: 'nuevo'
-      });
-    }
-
-    order.total = order.items.reduce((sum: number, item: CartItem) => sum + item.price * item.quantity, 0);
-
-    await setDoc(doc(db, 'orders', order.id), order);
+    await mutateOrder(activeOrderId, (order) => {
+      const existing = order.items.find(item => item.id === product.id && item.status === 'nuevo' && !item.note);
+      if (existing) {
+        existing.quantity += 1;
+      } else {
+        order.items.push({
+          ...product,
+          cartItemId: generateOrderId(),
+          quantity: 1,
+          status: 'nuevo',
+        });
+      }
+    });
+    return 'ok';
   },
 
   updateQuantity: async (cartItemId, delta) => {
     const { activeOrderId, orders } = get();
-    if (!activeOrderId) return;
+    if (!activeOrderId) return 'no-order';
 
-    const orderIndex = orders.findIndex(o => o.id === activeOrderId);
-    if (orderIndex === -1) return;
+    const item = orders.find(o => o.id === activeOrderId)?.items.find(i => i.cartItemId === cartItemId);
+    if (!item) return 'ok';
+    if (delta > 0 && !hasStockFor(item.id, orders)) return 'out-of-stock';
 
-    const order: Order = JSON.parse(JSON.stringify(orders[orderIndex]));
-    order.items = order.items.map((item: CartItem) => {
-      if (item.cartItemId === cartItemId && item.status === 'nuevo') {
-        return { ...item, quantity: item.quantity + delta };
-      }
-      return item;
-    }).filter((item: CartItem) => item.quantity > 0);
-
-    order.total = order.items.reduce((sum: number, item: CartItem) => sum + item.price * item.quantity, 0);
-    await updateDoc(doc(db, 'orders', order.id), { items: order.items, total: order.total });
+    await mutateOrder(activeOrderId, (order) => {
+      order.items = order.items.map(i =>
+        i.cartItemId === cartItemId && i.status === 'nuevo' ? { ...i, quantity: i.quantity + delta } : i
+      ).filter(i => i.quantity > 0);
+    });
+    return 'ok';
   },
 
-  payActiveOrder: async (method, discount = 0, cashTendered, change) => {
-    const { activeOrderId, orders } = get();
+  setItemNote: async (cartItemId, note) => {
+    const { activeOrderId } = get();
     if (!activeOrderId) return;
+    await mutateOrder(activeOrderId, (order) => {
+      const item = order.items.find(i => i.cartItemId === cartItemId);
+      if (!item || item.status !== 'nuevo') return;
+      const trimmed = note.trim();
+      if (trimmed) item.note = trimmed;
+      else delete item.note;
+    });
+  },
 
-    const orderToPay = orders.find(o => o.id === activeOrderId);
-    if (!orderToPay) return;
+  // Quita piezas que ya se enviaron a cocina (solo admin). Opcionalmente las regresa al inventario.
+  removeSentItem: async (orderId, cartItemId, quantity, restock) => {
+    await mutateOrder(orderId, (order, tx) => {
+      const item = order.items.find(i => i.cartItemId === cartItemId);
+      if (!item || item.status === 'nuevo') return;
+      const qty = Math.min(quantity, item.quantity);
+      item.quantity -= qty;
+      order.items = order.items.filter(i => i.quantity > 0);
 
-    const newPaidOrder: PaidOrder = {
-      ...orderToPay,
-      total: Math.max(0, orderToPay.total - discount),
-      discount,
-      paymentMethod: method,
-      paidAt: Date.now(),
-      ...(method === 'Efectivo' && cashTendered !== undefined && { cashTendered }),
-      ...(method === 'Efectivo' && change !== undefined && { change }),
-    };
+      if (restock && useInventoryStore.getState().getRecord(item.id).tracked) {
+        tx.set(doc(db, 'inventory', item.id), { stock: increment(qty), updatedAt: Date.now() }, { merge: true });
+      }
+    });
+  },
 
-    const batch = writeBatch(db);
-    batch.set(doc(db, 'paidOrders', orderToPay.id), newPaidOrder);
-    batch.delete(doc(db, 'orders', orderToPay.id));
-    await batch.commit();
+  payOrder: async (orderId, payment) => {
+    let paid: PaidOrder | null = null;
+
+    await runTransaction(db, async (tx) => {
+      const ref = doc(db, 'orders', orderId);
+      const snap = await tx.get(ref);
+      if (!snap.exists()) throw new Error('La cuenta ya fue cobrada o eliminada.');
+      const order = clean(snap.data() as Order);
+
+      const subtotal = calcTotal(order.items);
+      const discount = round2(Math.min(Math.max(0, payment.discount), subtotal));
+      const tip = round2(Math.max(0, payment.tip));
+
+      paid = clean<PaidOrder>({
+        ...order,
+        total: round2(subtotal - discount),
+        discount,
+        tip,
+        tipPercent: payment.tipPercent,
+        paymentMethod: payment.method,
+        paidAt: Date.now(),
+        paidBy: currentUserName(),
+        cashTendered: payment.method === 'Efectivo' ? payment.cashTendered : undefined,
+        change: payment.method === 'Efectivo' ? payment.change : undefined,
+      });
+
+      // Lo que nunca pasó por cocina (p. ej. bebidas servidas directo) se descuenta al cobrar
+      consumeStock(tx, order.items.filter(i => i.status === 'nuevo'));
+
+      tx.set(doc(db, 'paidOrders', order.id), paid);
+      tx.delete(ref);
+    });
+
+    return paid;
   },
 
   splitOrder: async (originalOrderId, itemsToMove) => {
-    const { orders } = get();
     const activeUser = useAuthStore.getState().activeUser;
-    const currentWaiter = activeUser ? activeUser.name : null;
-    const orderIndex = orders.findIndex(o => o.id === originalOrderId);
-    if (orderIndex === -1) return;
+    const newOrderId = generateOrderId();
 
-    // Deep clone to avoid mutating local state directly
-    const originalOrder: Order = JSON.parse(JSON.stringify(orders[orderIndex]));
-    const newItems: CartItem[] = [];
+    await runTransaction(db, async (tx) => {
+      const ref = doc(db, 'orders', originalOrderId);
+      const snap = await tx.get(ref);
+      if (!snap.exists()) throw new Error('La cuenta ya no existe.');
+      const originalOrder = clean(snap.data() as Order);
+      const newItems: CartItem[] = [];
 
-    // Process items to move
-    itemsToMove.forEach(moveRequest => {
-      const itemIndex = originalOrder.items.findIndex(i => i.cartItemId === moveRequest.id);
-      if (itemIndex > -1) {
-        const item = originalOrder.items[itemIndex];
-        // Move the requested quantity
+      itemsToMove.forEach(moveRequest => {
+        const item = originalOrder.items.find(i => i.cartItemId === moveRequest.id);
+        if (!item) return;
         const quantityToMove = Math.min(item.quantity, moveRequest.quantity);
-        
         if (quantityToMove > 0) {
-          // Add to new items
           newItems.push({ ...item, cartItemId: generateOrderId(), quantity: quantityToMove });
-          // Deduct from original
           item.quantity -= quantityToMove;
         }
+      });
+
+      if (newItems.length === 0) return;
+
+      originalOrder.items = originalOrder.items.filter(item => item.quantity > 0);
+
+      if (originalOrder.items.length === 0) {
+        tx.delete(ref);
+      } else {
+        tx.update(ref, { items: originalOrder.items, total: calcTotal(originalOrder.items) });
       }
+
+      const newOrder: Order = {
+        id: newOrderId,
+        name: `${originalOrder.name} (Separada)`,
+        waiter: activeUser?.name || originalOrder.waiter,
+        items: newItems,
+        total: calcTotal(newItems),
+        createdAt: Date.now(),
+      };
+      tx.set(doc(db, 'orders', newOrderId), clean(newOrder));
     });
 
-    // Remove items that now have 0 quantity in original order
-    originalOrder.items = originalOrder.items.filter(item => item.quantity > 0);
-    originalOrder.total = originalOrder.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-
-    // Create the new order
-    const newOrderId = generateOrderId();
-    const newOrder: Order = {
-      id: newOrderId,
-      name: `Cuenta ${orders.length + get().paidOrders.length + 1} (Separada)`,
-      waiter: currentWaiter || originalOrder.waiter,
-      items: newItems,
-      total: newItems.reduce((sum, item) => sum + item.price * item.quantity, 0),
-      createdAt: Date.now(),
-    };
-
-    const batch = writeBatch(db);
-    
-    // If the original order has no items left, we delete it, otherwise we update it
-    if (originalOrder.items.length === 0) {
-      batch.delete(doc(db, 'orders', originalOrder.id));
-    } else {
-      batch.update(doc(db, 'orders', originalOrder.id), { 
-        items: originalOrder.items, 
-        total: originalOrder.total 
-      });
-    }
-
-    // Save the new order
-    batch.set(doc(db, 'orders', newOrderId), newOrder);
-    
-    await batch.commit();
     set({ activeOrderId: newOrderId }); // Switch to the new order to pay it immediately
   },
 
@@ -295,7 +379,7 @@ export const useCartStore = create<CartState>((set, get) => ({
 
     const alertsSnapshot = await getDocs(collection(db, 'alerts'));
     alertsSnapshot.forEach(d => batch.delete(d.ref));
-    
+
     // Guardar el tiempo del último corte
     batch.set(doc(db, 'config', 'store'), { lastCutTime: Date.now() }, { merge: true });
 
@@ -303,23 +387,16 @@ export const useCartStore = create<CartState>((set, get) => ({
   },
 
   sendToKitchen: async (orderId) => {
-    const { orders } = get();
-    const orderIndex = orders.findIndex(o => o.id === orderId);
-    if (orderIndex === -1) return;
-
-    const order = JSON.parse(JSON.stringify(orders[orderIndex]));
-    let hasChanges = false;
-    order.items.forEach((item: CartItem) => {
-      if (item.status === 'nuevo') {
+    await mutateOrder(orderId, (order, tx) => {
+      const newItems = order.items.filter(item => item.status === 'nuevo');
+      if (newItems.length === 0) return;
+      const now = Date.now();
+      newItems.forEach(item => {
         item.status = 'preparando';
-        item.sentToKitchenAt = Date.now();
-        hasChanges = true;
-      }
+        item.sentToKitchenAt = now;
+      });
+      consumeStock(tx, newItems);
     });
-
-    if (hasChanges) {
-      await updateDoc(doc(db, 'orders', order.id), { items: order.items });
-    }
   },
 
   markAsReady: async (orderId) => {

@@ -37,6 +37,10 @@ export default function DashboardView() {
     return filteredOrders.reduce((sum, order) => sum + order.total, 0);
   }, [filteredOrders]);
 
+  const totalTips = useMemo(() => {
+    return filteredOrders.reduce((sum, order) => sum + (order.tip || 0), 0);
+  }, [filteredOrders]);
+
   const totalTickets = filteredOrders.length;
   const averageTicket = totalTickets > 0 ? totalRevenue / totalTickets : 0;
 
@@ -118,7 +122,7 @@ export default function DashboardView() {
 
       <div className="p-6 space-y-6">
         {/* KPI Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-6">
           <div className="bg-zinc-900 rounded-2xl p-6 border border-zinc-800 shadow-lg relative overflow-hidden">
             <div className="absolute top-0 right-0 p-4 opacity-10 text-emerald-500 text-6xl">
               💰
@@ -127,6 +131,14 @@ export default function DashboardView() {
             <h2 className="text-4xl font-bold text-emerald-400">${totalRevenue.toFixed(2)}</h2>
           </div>
           
+          <div className="bg-zinc-900 rounded-2xl p-6 border border-zinc-800 shadow-lg relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-4 opacity-10 text-sky-500 text-6xl">
+              🤝
+            </div>
+            <p className="text-zinc-400 font-medium mb-1">Propinas</p>
+            <h2 className="text-4xl font-bold text-sky-300">${totalTips.toFixed(2)}</h2>
+          </div>
+
           <div className="bg-zinc-900 rounded-2xl p-6 border border-zinc-800 shadow-lg relative overflow-hidden">
             <div className="absolute top-0 right-0 p-4 opacity-10 text-blue-500 text-6xl">
               🧾

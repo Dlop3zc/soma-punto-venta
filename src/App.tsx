@@ -7,24 +7,34 @@ import CheckoutView from './components/CheckoutView';
 import DashboardView from './components/DashboardView';
 import LoginView from './components/LoginView';
 import AdminUsersView from './components/AdminUsersView';
+import InventoryView from './components/InventoryView';
+import PrinterSettingsView from './components/PrinterSettingsView';
 import { useCartStore } from './store/useCartStore';
 import { useAuthStore } from './store/useAuthStore';
+import { useInventoryStore } from './store/useInventoryStore';
+import { usePrinterStore } from './store/usePrinterStore';
 import SomaLogo from './components/icons/SomaLogo';
 
 function App() {
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isMobileCartOpen, setIsMobileCartOpen] = useState(false);
-  const [activeView, setActiveView] = useState<'pos' | 'kitchen' | 'checkout' | 'dashboard' | 'users'>('pos');
+  const [activeView, setActiveView] = useState<'pos' | 'kitchen' | 'checkout' | 'dashboard' | 'users' | 'inventory' | 'printer'>('pos');
 
   const { orders, activeOrderId, initListeners, alerts, dismissAlert } = useCartStore();
   const { activeUser, initUsersListener, logout } = useAuthStore();
+  const initInventoryListener = useInventoryStore(s => s.initInventoryListener);
+  const printerConnected = usePrinterStore(s => !!s.transport);
 
   useEffect(() => {
     const unsubUsers = initUsersListener();
     const unsubCart = initListeners();
+    const unsubInventory = initInventoryListener();
+    // Reconectar sola la impresora autorizada previamente en este navegador
+    usePrinterStore.getState().reconnect();
     return () => {
       unsubUsers();
       unsubCart();
+      unsubInventory();
     };
   }, []);
 
@@ -33,7 +43,7 @@ function App() {
     if (activeUser) {
       if (activeUser.role === 'kitchen' && activeView !== 'kitchen') {
         setActiveView('kitchen');
-      } else if (activeUser.role === 'waiter' && (activeView === 'dashboard' || activeView === 'users')) {
+      } else if (activeUser.role === 'waiter' && ['dashboard', 'users', 'inventory', 'printer'].includes(activeView)) {
         setActiveView('pos');
       }
     }
@@ -63,6 +73,18 @@ function App() {
           <SomaLogo className="w-24 text-white" />
         </div>
         <div className="flex items-center gap-4">
+          {activeUser.role !== 'kitchen' && (
+            <span
+              className={`text-xs font-bold px-3 py-1 rounded-full border ${
+                printerConnected
+                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                  : 'bg-zinc-800 text-zinc-500 border-zinc-700'
+              }`}
+              title={printerConnected ? 'Impresora conectada' : 'Sin impresora en este equipo'}
+            >
+              🖨️ {printerConnected ? 'Lista' : 'Sin impresora'}
+            </span>
+          )}
           <div className="text-right hidden md:block">
             <p className="text-zinc-200 font-bold text-sm">{activeUser.name}</p>
             <p className="text-zinc-500 text-xs uppercase font-medium">{activeUser.role}</p>
@@ -87,6 +109,10 @@ function App() {
           <DashboardView />
         ) : activeView === 'users' && activeUser.role === 'admin' ? (
           <AdminUsersView />
+        ) : activeView === 'inventory' && activeUser.role === 'admin' ? (
+          <InventoryView />
+        ) : activeView === 'printer' && activeUser.role === 'admin' ? (
+          <PrinterSettingsView />
         ) : activeUser.role !== 'kitchen' ? (
           <>
             <main className="flex-1 overflow-y-auto">
@@ -189,6 +215,34 @@ function App() {
             >
               <span className="text-2xl">👥</span>
               <span className="text-[10px] md:text-xs font-bold">Usuarios</span>
+            </button>
+          )}
+
+          {/* Inventario - Only for Admin */}
+          {activeUser.role === 'admin' && (
+            <button
+              onClick={() => setActiveView('inventory')}
+              className={`w-14 h-14 md:w-16 md:h-16 flex flex-col items-center justify-center gap-1 rounded-2xl transition-colors ${activeView === 'inventory'
+                  ? 'bg-amber-600 text-white shadow-lg shadow-amber-600/20'
+                  : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-100'
+                }`}
+            >
+              <span className="text-2xl">📦</span>
+              <span className="text-[10px] md:text-xs font-bold">Inventario</span>
+            </button>
+          )}
+
+          {/* Impresora - Only for Admin */}
+          {activeUser.role === 'admin' && (
+            <button
+              onClick={() => setActiveView('printer')}
+              className={`w-14 h-14 md:w-16 md:h-16 flex flex-col items-center justify-center gap-1 rounded-2xl transition-colors ${activeView === 'printer'
+                  ? 'bg-slate-600 text-white shadow-lg shadow-slate-600/20'
+                  : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-100'
+                }`}
+            >
+              <span className="text-2xl">🖨️</span>
+              <span className="text-[10px] md:text-xs font-bold">Impresora</span>
             </button>
           )}
 

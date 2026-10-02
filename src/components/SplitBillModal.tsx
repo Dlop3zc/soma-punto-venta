@@ -51,7 +51,7 @@ export default function SplitBillModal({ isOpen, onClose }: SplitBillModalProps)
 
   // Calculate totals
   const totalToMove = activeOrder.items.reduce((sum, item) => {
-    const qtyToMove = selections[item.id] || 0;
+    const qtyToMove = selections[item.cartItemId] || 0;
     return sum + (item.price * qtyToMove);
   }, 0);
   const totalRemaining = activeOrder.total - totalToMove;
@@ -90,12 +90,12 @@ export default function SplitBillModal({ isOpen, onClose }: SplitBillModalProps)
 
           <div className="space-y-4">
             {activeOrder.items.map(item => {
-              const selectedQty = selections[item.id] || 0;
+              const selectedQty = selections[item.cartItemId] || 0;
               const isFullySelected = selectedQty === item.quantity;
               
               return (
                 <div 
-                  key={item.id} 
+                  key={item.cartItemId} 
                   className={`flex items-center justify-between p-4 rounded-2xl border-2 transition-colors ${
                     selectedQty > 0 
                       ? 'bg-emerald-950/20 border-emerald-500/30' 
@@ -104,6 +104,7 @@ export default function SplitBillModal({ isOpen, onClose }: SplitBillModalProps)
                 >
                   <div className="flex-1">
                     <h3 className="text-xl font-bold text-white">{item.name}</h3>
+                    {item.note && <p className="text-amber-300 text-sm">📝 {item.note}</p>}
                     <p className="text-zinc-500 text-sm">
                       Disponible: {item.quantity} x ${item.price.toFixed(2)}
                     </p>
@@ -111,7 +112,7 @@ export default function SplitBillModal({ isOpen, onClose }: SplitBillModalProps)
                   
                   <div className="flex items-center gap-4">
                     <button
-                      onClick={() => handleSelectAll(item.id, item.quantity)}
+                      onClick={() => handleSelectAll(item.cartItemId, item.quantity)}
                       className={`text-sm font-bold px-3 py-1 rounded-lg transition-colors ${
                         isFullySelected 
                           ? 'bg-emerald-500/20 text-emerald-400' 
@@ -123,7 +124,7 @@ export default function SplitBillModal({ isOpen, onClose }: SplitBillModalProps)
                     
                     <div className="flex items-center gap-3 bg-zinc-800 p-1.5 rounded-xl">
                       <button 
-                        onClick={() => handleDecrement(item.id)}
+                        onClick={() => handleDecrement(item.cartItemId)}
                         disabled={selectedQty === 0}
                         className="p-2 bg-zinc-700 rounded-lg text-white hover:bg-zinc-600 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                       >
@@ -133,7 +134,7 @@ export default function SplitBillModal({ isOpen, onClose }: SplitBillModalProps)
                         {selectedQty}
                       </span>
                       <button 
-                        onClick={() => handleIncrement(item.id, item.quantity)}
+                        onClick={() => handleIncrement(item.cartItemId, item.quantity)}
                         disabled={selectedQty === item.quantity}
                         className="p-2 bg-zinc-700 rounded-lg text-white hover:bg-zinc-600 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                       >

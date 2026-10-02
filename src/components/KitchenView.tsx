@@ -111,6 +111,9 @@ export default function KitchenView() {
                                   <span className="font-bold text-zinc-100 text-lg">{item.quantity}x</span>
                                   <span className="text-zinc-300 text-lg">{item.name}</span>
                                 </div>
+                                {item.note && (
+                                  <span className="text-amber-300 font-bold">📝 {item.note}</span>
+                                )}
                                 <KitchenTimer sentAt={item.sentToKitchenAt} />
                               </div>
                             </li>

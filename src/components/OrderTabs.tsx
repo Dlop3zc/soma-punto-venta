@@ -1,10 +1,13 @@
 import { useCartStore } from '../store/useCartStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { Plus } from 'lucide-react';
+import { useState } from 'react';
+import OrderNameModal from './OrderNameModal';
 
 export default function OrderTabs() {
   const { orders, activeOrderId, setActiveOrder, createOrder } = useCartStore();
   const { activeUser } = useAuthStore();
+  const [isNameModalOpen, setIsNameModalOpen] = useState(false);
 
   const visibleOrders = activeUser?.role === 'waiter' 
     ? orders.filter(o => o.waiter === activeUser.name)
@@ -32,12 +35,21 @@ export default function OrderTabs() {
         );
       })}
       <button
-        onClick={() => createOrder()}
+        onClick={() => setIsNameModalOpen(true)}
         className="px-4 py-3 rounded-t-xl bg-zinc-900/30 text-emerald-500 hover:bg-zinc-900 hover:text-emerald-400 transition-colors flex items-center justify-center border-t border-x border-transparent"
         title="Nueva Cuenta"
       >
         <Plus size={24} />
       </button>
+
+      {isNameModalOpen && (
+        <OrderNameModal
+          title="Nueva Cuenta"
+          confirmLabel="Abrir Cuenta"
+          onConfirm={async (name) => { await createOrder(name); }}
+          onClose={() => setIsNameModalOpen(false)}
+        />
+      )}
     </div>
   );
 }

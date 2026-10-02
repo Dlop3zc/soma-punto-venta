@@ -1,12 +1,16 @@
 import { useCartStore } from '../store/useCartStore';
 import { useAuthStore } from '../store/useAuthStore';
+import { usePrinterStore } from '../store/usePrinterStore';
 import { useState } from 'react';
+import { Printer, Trash2 } from 'lucide-react';
 import CheckoutModal from './CheckoutModal';
 import SplitBillModal from './SplitBillModal';
 
 export default function CheckoutView() {
-  const { orders, setActiveOrder } = useCartStore();
+  const { orders, setActiveOrder, deleteEmptyOrder } = useCartStore();
   const { activeUser } = useAuthStore();
+  const { transport, printPreBill } = usePrinterStore();
+  const [printingId, setPrintingId] = useState<string | null>(null);
   const [checkoutOrderId, setCheckoutOrderId] = useState<string | null>(null);
   const [splitBillOrderId, setSplitBillOrderId] = useState<string | null>(null);
 
@@ -23,6 +27,24 @@ export default function CheckoutView() {
   const handleSplitBill = (orderId: string) => {
     setActiveOrder(orderId);
     setSplitBillOrderId(orderId);
+  };
+
+  const handleDelete = async (orderId: string, name: string) => {
+    if (!window.confirm(`¿Eliminar la cuenta vacía "${name}"?`)) return;
+    try {
+      await deleteEmptyOrder(orderId);
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : 'No se pudo eliminar la cuenta.');
+    }
+  };
+
+  const handlePreBill = async (orderId: string) => {
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+    setPrintingId(orderId);
+    const ok = await printPreBill(order);
+    setPrintingId(null);
+    if (!ok) window.alert(usePrinterStore.getState().lastError || 'No se pudo imprimir.');
   };
 
   return (
@@ -54,9 +76,20 @@ export default function CheckoutView() {
                     <h2 className="text-xl font-bold text-white">{order.name}</h2>
                     <p className="text-blue-400 text-sm font-medium">👤 {order.waiter}</p>
                   </div>
-                  <div className="text-right">
-                    <p className="text-xs text-zinc-400">Total</p>
-                    <p className="text-xl font-bold text-emerald-400">${order.total.toFixed(2)}</p>
+                  <div className="flex items-center gap-3">
+                    <div className="text-right">
+                      <p className="text-xs text-zinc-400">Total</p>
+                      <p className="text-xl font-bold text-emerald-400">${order.total.toFixed(2)}</p>
+                    </div>
+                    {order.items.length === 0 && (
+                      <button
+                        onClick={() => handleDelete(order.id, order.name)}
+                        className="p-2 rounded-full bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white transition-colors"
+                        title="Eliminar cuenta vacía"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    )}
                   </div>
                 </div>
                 
@@ -67,6 +100,7 @@ export default function CheckoutView() {
                         <div className="flex-1">
                           <span className="font-bold text-zinc-100">{item.quantity}x</span>
                           <span className="text-zinc-300 ml-2">{item.name}</span>
+                          {item.note && <div className="text-xs text-amber-300 mt-1">📝 {item.note}</div>}
                           <div className="text-xs text-zinc-500 mt-1">
                             {item.status === 'nuevo' && 'Tomando orden...'}
                             {item.status === 'preparando' && 'En cocina...'}
@@ -93,6 +127,15 @@ export default function CheckoutView() {
                   >
                     <span>✂️</span> Separar Cuenta
                   </button>
+                  {transport && (
+                    <button
+                      onClick={() => handlePreBill(order.id)}
+                      disabled={order.items.length === 0 || printingId === order.id}
+                      className="w-full py-3 rounded-xl text-lg font-bold transition-colors flex items-center justify-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <Printer size={20} /> {printingId === order.id ? 'Imprimiendo...' : 'Imprimir Pre-cuenta'}
+                    </button>
+                  )}
                   <button
                     onClick={() => handleCheckout(order.id)}
                     disabled={order.items.length === 0}
@@ -111,10 +154,12 @@ export default function CheckoutView() {
         )}
       </div>
 
-      <CheckoutModal
-        isOpen={!!checkoutOrderId}
-        onClose={() => setCheckoutOrderId(null)}
-      />
+      {checkoutOrderId && (
+        <CheckoutModal
+          orderId={checkoutOrderId}
+          onClose={() => setCheckoutOrderId(null)}
+        />
+      )}
 
       <SplitBillModal
         isOpen={!!splitBillOrderId}
