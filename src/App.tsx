@@ -4,7 +4,7 @@ import Cart from './components/Cart';
 import PaidOrdersHistory from './components/PaidOrdersHistory';
 import KitchenView from './components/KitchenView';
 import CheckoutView from './components/CheckoutView';
-import DashboardView from './components/DashboardView';
+import AnalyticsView from './components/AnalyticsView';
 import LoginView from './components/LoginView';
 import AdminUsersView from './components/AdminUsersView';
 import InventoryView from './components/InventoryView';
@@ -106,7 +106,7 @@ function App() {
         ) : activeView === 'checkout' && activeUser.role !== 'kitchen' ? (
           <CheckoutView />
         ) : activeView === 'dashboard' && activeUser.role === 'admin' ? (
-          <DashboardView />
+          <AnalyticsView />
         ) : activeView === 'users' && activeUser.role === 'admin' ? (
           <AdminUsersView />
         ) : activeView === 'inventory' && activeUser.role === 'admin' ? (
@@ -199,8 +199,8 @@ function App() {
                   : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-100'
                 }`}
             >
-              <span className="text-2xl">📊</span>
-              <span className="text-[10px] md:text-xs font-bold">Resumen</span>
+              <span className="text-2xl">📈</span>
+              <span className="text-[10px] md:text-xs font-bold">Analítica</span>
             </button>
           )}
 
