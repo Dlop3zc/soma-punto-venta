@@ -39,28 +39,70 @@ npm run test:rules
 - La configuración web de Firebase (variables `VITE_FIREBASE_*`) es pública por diseño;
   lo que protege los datos son Authentication y las reglas.
 
-## Pruebas y producción
+## Publicar la app (pruebas y producción)
 
-La app se conecta al proyecto de Firebase indicado por las variables `VITE_FIREBASE_*`:
+Hay dos ambientes, cada uno con **su propio proyecto de Firebase** (base de datos, usuarios y dirección web):
 
-- **`.env`** (incluido en el repo) apunta al proyecto de **pruebas**. Es lo que se usa por
-  defecto en `npm run dev` y en cualquier build que no defina otras variables.
-- **Producción:** define **todas** las variables de `.env.example` con los datos del proyecto
-  real (consola de Firebase → Configuración del proyecto → Tus apps → Configuración del SDK):
-  - en el hosting (Vercel → Settings → Environment Variables, ambiente *Production*), o
-  - en un archivo `.env.production.local` (no se sube a git) si compilas en tu computadora.
+| Ambiente | Configuración | Alias en `.firebaserc` | Publicar |
+|---|---|---|---|
+| Pruebas | `.env.pruebas` | `pruebas` | `npm run deploy:pruebas` |
+| Producción | `.env.produccion` | `produccion` | `npm run deploy:prod` |
 
-  Las variables del hosting tienen prioridad sobre `.env`.
-- `VITE_ENVIRONMENT_LABEL` muestra una etiqueta (por ejemplo **PRUEBAS**) en el encabezado
-  y en el login. En producción déjala vacía.
+- `npm run dev` siempre usa **pruebas**.
+- Cada `deploy:*` compila la app, la publica en Firebase Hosting y publica las reglas de Firestore.
+- La app queda en `https://<id-del-proyecto>.web.app`.
+- **El build de producción se niega a compilar si:**
+  - falta algún dato;
+  - `.env.produccion` y `.firebaserc` no coinciden;
+  - producción apunta al proyecto de pruebas;
+  - tiene la etiqueta "Pruebas".
 
-Para publicar reglas y funciones en cada proyecto:
+### Crear el proyecto de producción (una sola vez)
+
+1. **Crear el proyecto.** En [console.firebase.google.com](https://console.firebase.google.com): **Agregar proyecto**, con un nombre como `soma-pos`.
+   - Google Analytics es opcional.
+   - Anota el **ID del proyecto** (por ejemplo `soma-pos-1a2b3`).
+2. **Activar el inicio de sesión con contraseña.** **Authentication** → *Comenzar* → *Sign-in method* → **Correo electrónico/contraseña** → Habilitar.
+3. **Crear la base de datos.** **Firestore Database** → *Crear base de datos*.
+   - Elige la ubicación más cercana, por ejemplo `nam5` o `us-central`.
+   - Escoge *modo de producción*.
+4. **Registrar la app web.** ⚙️ *Configuración del proyecto* → *Tus apps* → ícono **</>**.
+   - Registra la app con el nombre `SOMA POS`. Deja *Hosting* sin marcar: no hace falta.
+   - Copia los valores de `firebaseConfig` en `.env.produccion`:
+     - `apiKey` → `VITE_FIREBASE_API_KEY`
+     - `authDomain` → `VITE_FIREBASE_AUTH_DOMAIN`
+     - y así con los demás.
+5. **Conectar el alias.** En la terminal:
+   ```bash
+   npx firebase login --no-localhost     # si no has iniciado sesión
+   npx firebase use --add                # elige el proyecto nuevo y llámalo: produccion
+   ```
+   Esto agrega `"produccion": "<id>"` a `.firebaserc`.
+6. **Publicar.** Corre `npm run deploy:prod`.
+   - Si dice que no encuentra el sitio de Hosting, ve en la consola a **Hosting** → *Comenzar* (avanza sin ejecutar los comandos que muestra) y repite.
+7. **Configuración inicial.** Abre `https://<id>.web.app`, crea el **administrador** (aparece "Configuración inicial") y da de alta al personal en **Usuarios**.
+   - La carta se importa sola.
+   - El inventario empieza vacío.
+8. **Guardar la configuración.** Sube `.env.produccion` y `.firebaserc` a git.
+   - Estos valores no son secretos: lo que protege los datos son Authentication y las reglas.
+
+Desde ese momento, los cambios se prueban primero con `npm run deploy:pruebas` y, cuando todo está bien, se publican con `npm run deploy:prod`.
+
+### Instalar la app en tablets y celulares
+
+La app se puede instalar: abre en pantalla completa y tiene su propio ícono.
+
+- **Android (Chrome):** abre la dirección y ve a menú ⋮ → **Instalar app** (o *Agregar a pantalla principal*).
+- **iPad/iPhone (Safari):** abre la dirección y toca Compartir → **Agregar a inicio**.
+- **PC (Chrome/Edge):** usa el ícono de instalar en la barra de direcciones.
+
+Cuando se publica una versión nueva, la app muestra **"Hay una versión nueva"** con el botón *Actualizar*. Nunca se recarga sola, para no interrumpir un cobro.
+
+### Solo reglas o funciones
 
 ```bash
-npx firebase login
-npm run deploy:rules                        # proyecto de pruebas
-npx firebase use --add                      # una vez: elegir el proyecto real y llamarlo "produccion"
-npm run deploy:rules:prod                   # proyecto de producción
+npm run deploy:rules          # reglas en pruebas
+npm run deploy:rules:prod     # reglas en producción
 ```
 
 ## Puesta en producción de la seguridad (una sola vez)
@@ -90,7 +132,7 @@ y borrar cuentas por completo.
 
 1. Cambiar el proyecto al plan **Blaze** en la consola de Firebase.
 2. `cd functions && npm install && cd .. && npm run deploy:functions` (o `deploy:functions:prod`).
-3. Definir `VITE_ADMIN_FUNCTIONS=true` en las variables de ese ambiente y volver a desplegar.
+3. Poner `VITE_ADMIN_FUNCTIONS=true` en `.env.pruebas` o `.env.produccion` y volver a publicar.
 
 ## Impresora de tickets
 
