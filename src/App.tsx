@@ -9,6 +9,7 @@ import LoginView from './components/LoginView';
 import AdminUsersView from './components/AdminUsersView';
 import InventoryView from './components/InventoryView';
 import PrinterSettingsView from './components/PrinterSettingsView';
+import ChangePasswordModal from './components/ChangePasswordModal';
 import { useCartStore } from './store/useCartStore';
 import { useAuthStore, type UserRole } from './store/useAuthStore';
 import { useInventoryStore } from './store/useInventoryStore';
@@ -43,25 +44,39 @@ function App() {
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isMobileCartOpen, setIsMobileCartOpen] = useState(false);
   const [isMoreOpen, setIsMoreOpen] = useState(false);
+  const [isPasswordOpen, setIsPasswordOpen] = useState(false);
   const [activeView, setActiveView] = useState<View>('pos');
 
   const { orders, activeOrderId, initListeners, alerts, dismissAlert } = useCartStore();
-  const { activeUser, initUsersListener, logout } = useAuthStore();
+  const { activeUser, initAuth, initUsersListener, logout } = useAuthStore();
   const initInventoryListener = useInventoryStore(s => s.initInventoryListener);
   const printerConnected = usePrinterStore(s => !!s.transport);
+  const sessionUid = activeUser?.id;
+  const sessionRole = activeUser?.role;
 
+  // Sesión de Firebase Auth (se recuerda al recargar la página)
+  useEffect(() => initAuth(), [initAuth]);
+
+  // Los datos solo se leen con sesión iniciada: las reglas de Firestore lo exigen
   useEffect(() => {
-    const unsubUsers = initUsersListener();
+    if (!sessionUid) return;
     const unsubCart = initListeners();
     const unsubInventory = initInventoryListener();
     // Reconectar sola la impresora autorizada previamente en este navegador
     usePrinterStore.getState().reconnect();
     return () => {
-      unsubUsers();
       unsubCart();
       unsubInventory();
+      // No dejar datos del turno en memoria después de cerrar sesión
+      useCartStore.setState({ orders: [], paidOrders: [], alerts: [], activeOrderId: null });
+      useInventoryStore.setState({ inventory: {} });
     };
-  }, []);
+  }, [sessionUid, initListeners, initInventoryListener]);
+
+  useEffect(() => {
+    if (!sessionUid || sessionRole !== 'admin') return;
+    return initUsersListener();
+  }, [sessionUid, sessionRole, initUsersListener]);
 
   // Enforce role access on view change
   useEffect(() => {
@@ -130,6 +145,14 @@ function App() {
               <p className="text-zinc-200 font-bold text-sm leading-tight max-w-[40vw] truncate">{activeUser.name}</p>
               <p className="text-zinc-500 text-[10px] md:text-xs uppercase font-medium">{activeUser.role}</p>
             </div>
+            <button
+              onClick={() => setIsPasswordOpen(true)}
+              className="w-10 h-10 flex items-center justify-center rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-colors"
+              title="Cambiar mi contraseña"
+              aria-label="Cambiar mi contraseña"
+            >
+              🔑
+            </button>
             <button
               onClick={handleLogout}
               className="w-10 h-10 flex items-center justify-center rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-colors"
@@ -286,6 +309,8 @@ function App() {
       )}
 
       {/* Modals */}
+      {isPasswordOpen && <ChangePasswordModal onClose={() => setIsPasswordOpen(false)} />}
+
       {activeUser.role === 'admin' && (
         <PaidOrdersHistory
           isOpen={isHistoryOpen}
