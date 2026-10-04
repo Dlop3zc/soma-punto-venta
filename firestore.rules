@@ -103,6 +103,32 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Orden de las categorías de la carta
+    match /config/menu {
+      allow read: if isActive();
+      allow write: if isAdmin()
+        && request.resource.data.categories is list
+        && request.resource.data.categories.size() <= 100;
+    }
+
+    // ---------- Carta ----------
+    match /products/{productId} {
+      allow read: if isActive();
+      allow delete: if isAdmin();
+      allow create, update: if isAdmin() && validProduct(productId);
+    }
+
+    function validProduct(productId) {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['id', 'name', 'price', 'category', 'visible', 'position', 'updatedAt'])
+        && d.id == productId
+        && d.name is string && d.name.size() > 0 && d.name.size() <= 60
+        && (d.price is int || d.price is float) && d.price >= 0
+        && d.category is string && d.category.size() > 0 && d.category.size() <= 40
+        && d.visible is bool
+        && d.position is int;
+    }
+
     // ---------- Operación ----------
     match /orders/{orderId} {
       allow read: if isActive();

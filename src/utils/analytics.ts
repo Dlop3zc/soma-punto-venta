@@ -1,6 +1,6 @@
 import type { PaidOrder } from '../store/useCartStore';
 import type { InventoryRecord } from '../store/useInventoryStore';
-import type { Product } from '../data/mockProducts';
+import type { Product } from '../data/defaultMenu';
 
 // ---------- Periodos ----------
 

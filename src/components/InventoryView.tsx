@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Minus, Plus, Search } from 'lucide-react';
-import { mockProducts, categories, type Category, type Product } from '../data/mockProducts';
+import type { Product } from '../data/defaultMenu';
+import { useMenuStore } from '../store/useMenuStore';
 import { useCartStore } from '../store/useCartStore';
 import { useInventoryStore, DEFAULT_INVENTORY, type InventoryRecord } from '../store/useInventoryStore';
 import { getAvailability, reservedQuantity, LOW_STOCK_THRESHOLD, type AvailabilityStatus } from '../utils/stock';
@@ -17,16 +18,18 @@ const STATUS_STYLE: Record<AvailabilityStatus, { label: string; className: strin
 export default function InventoryView() {
   const orders = useCartStore(s => s.orders);
   const { inventory, setStock, adjustStock, setTracked, setAvailable } = useInventoryStore();
-  const [category, setCategory] = useState<Category>('Todo');
+  const { products, categories: menuCategories } = useMenuStore();
+  const categories = ['Todo', ...menuCategories];
+  const [category, setCategory] = useState('Todo');
   const [filter, setFilter] = useState<Filter>('todos');
   const [search, setSearch] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  const rows = useMemo(() => mockProducts.map(product => {
+  const rows = useMemo(() => products.map(product => {
     const record = inventory[product.id] ?? DEFAULT_INVENTORY;
     const reserved = reservedQuantity(orders, product.id);
     return { product, record, reserved, availability: getAvailability(record, reserved) };
-  }), [inventory, orders]);
+  }), [products, inventory, orders]);
 
   const visible = rows.filter(({ product, record, availability }) => {
     if (category !== 'Todo' && product.category !== category) return false;
@@ -122,7 +125,7 @@ export default function InventoryView() {
           </div>
           <select
             value={category}
-            onChange={(e) => setCategory(e.target.value as Category)}
+            onChange={(e) => setCategory(e.target.value)}
             className="bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2 text-white"
           >
             {categories.map(c => <option key={c} value={c}>{c === 'Todo' ? 'Todas las categorías' : c}</option>)}

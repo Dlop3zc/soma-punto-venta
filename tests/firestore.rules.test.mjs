@@ -234,6 +234,31 @@ describe('operación del bar', () => {
     await assertSucceeds(setDoc(doc(db, 'inventory/cag-1'), { stock: 50, tracked: true, available: false }, { merge: true }));
   });
 
+  test('solo el admin edita la carta, y con datos válidos', async () => {
+    const product = (extra = {}) => ({
+      id: 'p1', name: 'Margarita', price: 120, category: 'Coctelería', visible: true, position: 0, updatedAt: 1, ...extra,
+    });
+    const admin = as('admin1');
+    await assertSucceeds(setDoc(doc(admin, 'products/p1'), product()));
+    await assertSucceeds(updateDoc(doc(admin, 'products/p1'), { price: 99.5, visible: false }));
+    await assertSucceeds(setDoc(doc(admin, 'config/menu'), { categories: ['Coctelería'], updatedAt: 1 }));
+    await assertFails(setDoc(doc(admin, 'products/p2'), product({ id: 'p2', price: -5 })));
+    await assertFails(setDoc(doc(admin, 'products/p3'), product({ id: 'otro' })));
+    await assertFails(setDoc(doc(admin, 'products/p4'), product({ id: 'p4', name: '' })));
+    await assertFails(setDoc(doc(admin, 'products/p5'), product({ id: 'p5', extra: 1 })));
+
+    for (const uid of ['mesero1', 'cocina1']) {
+      const db = as(uid);
+      await assertSucceeds(getDoc(doc(db, 'products/p1')));
+      await assertSucceeds(getDoc(doc(db, 'config/menu')));
+      await assertFails(updateDoc(doc(db, 'products/p1'), { price: 1 }));
+      await assertFails(deleteDoc(doc(db, 'products/p1')));
+      await assertFails(setDoc(doc(db, 'config/menu'), { categories: [] }));
+    }
+    await assertFails(getDoc(doc(anon(), 'products/p1')));
+    await assertSucceeds(deleteDoc(doc(admin, 'products/p1')));
+  });
+
   test('colecciones desconocidas están cerradas', async () => {
     await assertFails(setDoc(doc(as('admin1'), 'otra/x'), { a: 1 }));
   });
