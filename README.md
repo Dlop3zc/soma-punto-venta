@@ -136,6 +136,12 @@ y borrar cuentas por completo.
 
 ## Impresora de tickets
 
+> **Activación por ambiente.** La impresión solo aparece donde `VITE_PRINTING=true`. Hoy está
+> activa en pruebas (`.env.pruebas`) y apagada en producción. Para activarla en producción,
+> agrega `VITE_PRINTING=true` a `.env.produccion` y publica con `npm run deploy:prod`.
+> Apagada, la app oculta la pantalla Impresora, el indicador del encabezado y todos los botones
+> de imprimir.
+
 Se configura en **Impresora** (solo admin), por equipo. Hay dos modos y el ticket es el mismo
 en ambos:
 

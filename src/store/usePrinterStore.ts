@@ -68,9 +68,13 @@ function loadSettings(): PrinterSettings {
   return { ...DEFAULT_SETTINGS, mode: recommendedMode() };
 }
 
+// La impresión se activa por ambiente con VITE_PRINTING=true (.env.pruebas / .env.produccion).
+// Apagada, la app no muestra nada de impresión y nunca toca la impresora.
+export const printingEnabled = import.meta.env.VITE_PRINTING === 'true';
+
 // Hay forma de imprimir en este equipo (modo sistema siempre; directo si está conectada)
 export const selectCanPrint = (s: { settings: PrinterSettings; transport: PrinterTransport | null }) =>
-  s.settings.mode === 'system' || !!s.transport;
+  printingEnabled && (s.settings.mode === 'system' || !!s.transport);
 
 function saveSettings(settings: PrinterSettings) {
   try {
@@ -163,7 +167,7 @@ export const usePrinterStore = create<PrinterState>((set, get) => {
 
     reconnect: async () => {
       const { settings, transport } = get();
-      if (transport) return;
+      if (transport || !printingEnabled) return;
       try {
         const t = await reconnectPrinter(settings.connectionType, settings.baudRate);
         if (t) set({ transport: t, status: 'connected', deviceLabel: t.label, lastError: null });

@@ -16,7 +16,7 @@ import ChangePasswordModal from './components/ChangePasswordModal';
 import { useCartStore } from './store/useCartStore';
 import { useAuthStore, type UserRole } from './store/useAuthStore';
 import { useInventoryStore } from './store/useInventoryStore';
-import { usePrinterStore } from './store/usePrinterStore';
+import { usePrinterStore, printingEnabled } from './store/usePrinterStore';
 import SomaLogo from './components/icons/SomaLogo';
 import { environmentLabel } from './firebase';
 
@@ -31,7 +31,7 @@ interface NavItem {
 }
 
 // Orden = prioridad: en teléfono los primeros caben en la barra inferior y el resto va en "Más"
-const NAV_ITEMS: NavItem[] = [
+const ALL_NAV_ITEMS: NavItem[] = [
   { key: 'pos', icon: '🍽️', label: 'Menú', roles: ['admin', 'waiter'], activeClass: 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' },
   { key: 'kitchen', icon: '👨‍🍳', label: 'Por Cocinar', roles: ['admin', 'waiter', 'kitchen'], activeClass: 'bg-orange-600 text-white shadow-lg shadow-orange-600/20' },
   { key: 'checkout', icon: '💰', label: 'Caja', roles: ['admin', 'waiter'], activeClass: 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20' },
@@ -42,6 +42,9 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'printer', icon: '🖨️', label: 'Impresora', roles: ['admin'], activeClass: 'bg-slate-600 text-white shadow-lg shadow-slate-600/20' },
   { key: 'corte', icon: '✂️', label: 'Corte', roles: ['admin'], activeClass: '' },
 ];
+
+// Sin impresión en este ambiente (VITE_PRINTING), no se muestra la pantalla Impresora
+const NAV_ITEMS = ALL_NAV_ITEMS.filter(i => i.key !== 'printer' || printingEnabled);
 
 const MOBILE_SLOTS = 4;
 
@@ -159,7 +162,7 @@ function App() {
             )}
           </div>
           <div className="flex items-center gap-2 md:gap-4 min-w-0">
-            {activeUser.role !== 'kitchen' && (
+            {printingEnabled && activeUser.role !== 'kitchen' && (
               <span
                 className={`shrink-0 text-xs font-bold px-2.5 md:px-3 py-1 rounded-full border ${
                   printerConnected || systemPrint
@@ -208,7 +211,7 @@ function App() {
           <InventoryView />
         ) : activeView === 'menu' && activeUser.role === 'admin' ? (
           <MenuEditorView />
-        ) : activeView === 'printer' && activeUser.role === 'admin' ? (
+        ) : activeView === 'printer' && activeUser.role === 'admin' && printingEnabled ? (
           <PrinterSettingsView />
         ) : activeUser.role !== 'kitchen' ? (
           <>
