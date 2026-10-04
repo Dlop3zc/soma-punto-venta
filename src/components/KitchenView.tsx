@@ -39,13 +39,13 @@ export default function KitchenView() {
 
   return (
     <div className="flex-1 h-full bg-zinc-900 flex flex-col overflow-hidden">
-      <div className="p-6 border-b border-zinc-800 bg-zinc-950 flex flex-col gap-4">
-        <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold text-white flex items-center gap-3">
+      <div className="page-header flex flex-col gap-4">
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="page-title">
             <span>👨‍🍳</span> Vista Por Cocinar
           </h1>
-          <div className="text-zinc-400 font-medium">
-            {kitchenOrders.length} orden(es) pendiente(s)
+          <div className="text-zinc-400 font-medium text-sm md:text-base whitespace-nowrap">
+            {kitchenOrders.length} pendiente{kitchenOrders.length === 1 ? '' : 's'}
           </div>
         </div>
 
@@ -74,7 +74,7 @@ export default function KitchenView() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6">
+      <div className="flex-1 overflow-y-auto p-3 md:p-6">
         {activeTab === 'pendientes' && (
           <>
             {kitchenOrders.length === 0 ? (
@@ -83,7 +83,7 @@ export default function KitchenView() {
                 <p className="text-2xl font-medium">No hay órdenes pendientes</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-6">
                 {kitchenOrders.map(order => {
                   const preparingItems = order.items.filter(item => item.status === 'preparando');
 

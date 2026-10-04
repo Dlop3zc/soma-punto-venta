@@ -51,12 +51,12 @@ export default function PaidOrdersHistory({ isOpen, onClose }: { isOpen: boolean
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-      <div className="bg-zinc-900 border border-zinc-700 rounded-3xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+    <div className="modal-backdrop">
+      <div className="modal-panel max-w-4xl">
         
-        <div className="p-6 md:p-8 border-b border-zinc-800 flex justify-between items-center bg-zinc-950 flex-wrap gap-4">
+        <div className="p-4 md:p-8 border-b border-zinc-800 flex justify-between items-center bg-zinc-950 flex-wrap gap-3 md:gap-4 shrink-0">
           <div>
-            <h2 className="text-3xl font-bold text-zinc-100">Corte de Caja</h2>
+            <h2 className="text-2xl md:text-3xl font-bold text-zinc-100">Corte de Caja</h2>
             <p className="text-zinc-500 mt-1">Historial de cuentas pagadas</p>
           </div>
           <div className="flex items-center gap-3">
@@ -84,13 +84,13 @@ export default function PaidOrdersHistory({ isOpen, onClose }: { isOpen: boolean
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-6">
+        <div className="flex-1 min-h-0 overflow-y-auto p-4 md:p-8 space-y-4 md:space-y-6">
           
           {/* Summary Section */}
-          <div className="bg-gradient-to-br from-blue-900/40 to-indigo-900/40 border border-blue-500/30 rounded-2xl p-6 md:p-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+          <div className="bg-gradient-to-br from-blue-900/40 to-indigo-900/40 border border-blue-500/30 rounded-2xl p-5 md:p-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
             <div>
               <p className="text-blue-400 font-medium uppercase tracking-wider text-sm mb-1">Ventas Totales</p>
-              <p className="text-5xl font-black text-white">${totalSales.toFixed(2)}</p>
+              <p className="text-4xl md:text-5xl font-black text-white">${totalSales.toFixed(2)}</p>
               <p className="text-blue-300/80 mt-2">{paidOrders.length} cuentas cobradas</p>
             </div>
             
@@ -117,8 +117,8 @@ export default function PaidOrdersHistory({ isOpen, onClose }: { isOpen: boolean
           </div>
 
           {/* Tips Section */}
-          <div className="bg-sky-950/30 border border-sky-500/30 rounded-2xl p-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
+          <div className="bg-sky-950/30 border border-sky-500/30 rounded-2xl p-5 md:p-6 grid grid-cols-2 sm:grid-cols-3 gap-4">
+            <div className="col-span-2 sm:col-span-1">
               <p className="text-sky-400 font-medium uppercase tracking-wider text-sm mb-1">Propinas Totales</p>
               <p className="text-4xl font-black text-white">${tips.total.toFixed(2)}</p>
               <p className="text-sky-300/70 text-sm mt-1">No incluidas en ventas</p>
@@ -143,7 +143,7 @@ export default function PaidOrdersHistory({ isOpen, onClose }: { isOpen: boolean
               </div>
             ) : (
               paidOrders.map((order) => (
-                <div key={order.id} className="bg-zinc-800/50 rounded-2xl p-6 border border-zinc-700 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 hover:bg-zinc-800 transition-colors">
+                <div key={order.id} className="bg-zinc-800/50 rounded-2xl p-4 md:p-6 border border-zinc-700 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 hover:bg-zinc-800 transition-colors">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
                       <h3 className="text-2xl font-bold text-zinc-100">{order.name}</h3>
@@ -175,7 +175,7 @@ export default function PaidOrdersHistory({ isOpen, onClose }: { isOpen: boolean
                     )}
                   </div>
                   
-                  <div className="flex items-center gap-6 w-full md:w-auto justify-between md:justify-end">
+                  <div className="flex items-center gap-3 md:gap-6 w-full md:w-auto justify-between md:justify-end">
                     <span className={`px-4 py-2 rounded-full text-sm font-bold uppercase tracking-wider ${
                       order.paymentMethod === 'Efectivo' 
                         ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
@@ -183,7 +183,7 @@ export default function PaidOrdersHistory({ isOpen, onClose }: { isOpen: boolean
                     }`}>
                       {order.paymentMethod}
                     </span>
-                    <span className="text-3xl font-bold text-white w-32 text-right">
+                    <span className="text-2xl md:text-3xl font-bold text-white md:w-32 text-right">
                       ${order.total.toFixed(2)}
                     </span>
                     {transport && (

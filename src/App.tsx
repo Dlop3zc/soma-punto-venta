@@ -10,15 +10,40 @@ import AdminUsersView from './components/AdminUsersView';
 import InventoryView from './components/InventoryView';
 import PrinterSettingsView from './components/PrinterSettingsView';
 import { useCartStore } from './store/useCartStore';
-import { useAuthStore } from './store/useAuthStore';
+import { useAuthStore, type UserRole } from './store/useAuthStore';
 import { useInventoryStore } from './store/useInventoryStore';
 import { usePrinterStore } from './store/usePrinterStore';
 import SomaLogo from './components/icons/SomaLogo';
 
+type View = 'pos' | 'kitchen' | 'checkout' | 'dashboard' | 'users' | 'inventory' | 'printer';
+
+interface NavItem {
+  key: View | 'corte';
+  icon: string;
+  label: string;
+  roles: UserRole[];
+  activeClass: string;
+}
+
+// Orden = prioridad: en teléfono los primeros caben en la barra inferior y el resto va en "Más"
+const NAV_ITEMS: NavItem[] = [
+  { key: 'pos', icon: '🍽️', label: 'Menú', roles: ['admin', 'waiter'], activeClass: 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' },
+  { key: 'kitchen', icon: '👨‍🍳', label: 'Por Cocinar', roles: ['admin', 'waiter', 'kitchen'], activeClass: 'bg-orange-600 text-white shadow-lg shadow-orange-600/20' },
+  { key: 'checkout', icon: '💰', label: 'Caja', roles: ['admin', 'waiter'], activeClass: 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20' },
+  { key: 'dashboard', icon: '📈', label: 'Analítica', roles: ['admin'], activeClass: 'bg-purple-600 text-white shadow-lg shadow-purple-600/20' },
+  { key: 'inventory', icon: '📦', label: 'Inventario', roles: ['admin'], activeClass: 'bg-amber-600 text-white shadow-lg shadow-amber-600/20' },
+  { key: 'users', icon: '👥', label: 'Usuarios', roles: ['admin'], activeClass: 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' },
+  { key: 'printer', icon: '🖨️', label: 'Impresora', roles: ['admin'], activeClass: 'bg-slate-600 text-white shadow-lg shadow-slate-600/20' },
+  { key: 'corte', icon: '✂️', label: 'Corte', roles: ['admin'], activeClass: '' },
+];
+
+const MOBILE_SLOTS = 4;
+
 function App() {
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isMobileCartOpen, setIsMobileCartOpen] = useState(false);
-  const [activeView, setActiveView] = useState<'pos' | 'kitchen' | 'checkout' | 'dashboard' | 'users' | 'inventory' | 'printer'>('pos');
+  const [isMoreOpen, setIsMoreOpen] = useState(false);
+  const [activeView, setActiveView] = useState<View>('pos');
 
   const { orders, activeOrderId, initListeners, alerts, dismissAlert } = useCartStore();
   const { activeUser, initUsersListener, logout } = useAuthStore();
@@ -55,9 +80,24 @@ function App() {
 
   const currentOrder = orders.find(o => o.id === activeOrderId);
   const itemCount = currentOrder?.items.reduce((acc, item) => acc + item.quantity, 0) || 0;
+  const visibleOrders = activeUser.role === 'waiter' ? orders.filter(o => o.waiter === activeUser.name) : orders;
+  const kitchenPending = orders.filter(o => o.items.some(i => i.status === 'preparando')).length;
 
   // Find the first unread alert for the current waiter (or all if admin)
   const activeAlert = alerts.find(a => !a.read && (a.waiter === activeUser.name || activeUser.role === 'admin'));
+
+  const navItems = NAV_ITEMS.filter(i => i.roles.includes(activeUser.role));
+  const needsMore = navItems.length > MOBILE_SLOTS + 1;
+  const mobilePrimary = needsMore ? navItems.slice(0, MOBILE_SLOTS) : navItems;
+  const mobileMore = needsMore ? navItems.slice(MOBILE_SLOTS) : [];
+  const showNav = navItems.length > 1;
+
+  const handleNav = (key: NavItem['key']) => {
+    setIsMoreOpen(false);
+    setIsMobileCartOpen(false);
+    if (key === 'corte') setIsHistoryOpen(true);
+    else setActiveView(key);
+  };
 
   const handleLogout = () => {
     if (window.confirm("¿Seguro que deseas cerrar sesión?")) {
@@ -65,42 +105,44 @@ function App() {
     }
   };
 
+  const badgeFor = (key: NavItem['key']) => (key === 'kitchen' && kitchenPending > 0 ? kitchenPending : 0);
+
   return (
-    <div className="flex h-screen bg-black overflow-hidden flex-col">
+    <div className="flex h-dvh bg-black overflow-hidden flex-col">
       {/* Top Navigation / Header */}
-      <header className="h-16 border-b border-zinc-800 bg-zinc-900/50 flex items-center justify-between px-4 lg:px-6 shrink-0">
-        <div className="flex items-center gap-4">
-          <SomaLogo className="w-24 text-white" />
-        </div>
-        <div className="flex items-center gap-4">
-          {activeUser.role !== 'kitchen' && (
-            <span
-              className={`text-xs font-bold px-3 py-1 rounded-full border ${
-                printerConnected
-                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                  : 'bg-zinc-800 text-zinc-500 border-zinc-700'
-              }`}
-              title={printerConnected ? 'Impresora conectada' : 'Sin impresora en este equipo'}
+      <header className="border-b border-zinc-800 bg-zinc-900/50 shrink-0 pt-safe">
+        <div className="h-14 md:h-16 flex items-center justify-between px-3 md:px-6">
+          <SomaLogo className="w-16 md:w-24 text-white" />
+          <div className="flex items-center gap-2 md:gap-4">
+            {activeUser.role !== 'kitchen' && (
+              <span
+                className={`text-xs font-bold px-2.5 md:px-3 py-1 rounded-full border ${
+                  printerConnected
+                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                    : 'bg-zinc-800 text-zinc-500 border-zinc-700'
+                }`}
+                title={printerConnected ? 'Impresora conectada' : 'Sin impresora en este equipo'}
+              >
+                🖨️<span className="hidden sm:inline"> {printerConnected ? 'Lista' : 'Sin impresora'}</span>
+              </span>
+            )}
+            <div className="text-right">
+              <p className="text-zinc-200 font-bold text-sm leading-tight max-w-[40vw] truncate">{activeUser.name}</p>
+              <p className="text-zinc-500 text-[10px] md:text-xs uppercase font-medium">{activeUser.role}</p>
+            </div>
+            <button
+              onClick={handleLogout}
+              className="w-10 h-10 flex items-center justify-center rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-colors"
+              title="Cerrar Sesión"
             >
-              🖨️ {printerConnected ? 'Lista' : 'Sin impresora'}
-            </span>
-          )}
-          <div className="text-right hidden md:block">
-            <p className="text-zinc-200 font-bold text-sm">{activeUser.name}</p>
-            <p className="text-zinc-500 text-xs uppercase font-medium">{activeUser.role}</p>
+              🚪
+            </button>
           </div>
-          <button
-            onClick={handleLogout}
-            className="p-2 rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-colors"
-            title="Cerrar Sesión"
-          >
-            🚪
-          </button>
         </div>
       </header>
 
       {/* Main Content Area */}
-      <div className="flex flex-1 overflow-hidden relative">
+      <div className="flex flex-1 min-h-0 overflow-hidden relative">
         {activeView === 'kitchen' ? (
           <KitchenView />
         ) : activeView === 'checkout' && activeUser.role !== 'kitchen' ? (
@@ -115,29 +157,62 @@ function App() {
           <PrinterSettingsView />
         ) : activeUser.role !== 'kitchen' ? (
           <>
-            <main className="flex-1 overflow-y-auto">
+            <main className="flex-1 min-w-0 overflow-hidden">
               <ProductCatalog />
             </main>
 
-            {/* Cart Panel - Hidden on mobile unless toggled, always visible on md+ */}
+            {/* Teléfono: barra flotante con la cuenta actual; abre el carrito a pantalla completa */}
+            {!isMobileCartOpen && !isMoreOpen && (
+              <button
+                onClick={() => setIsMobileCartOpen(true)}
+                className="md:hidden absolute left-3 right-3 bottom-3 z-30 flex items-center gap-3 px-4 py-3 rounded-2xl bg-blue-600 active:bg-blue-700 text-white shadow-2xl shadow-black/60"
+              >
+                <span className="relative text-2xl">
+                  🧾
+                  {itemCount > 0 && (
+                    <span className="absolute -top-2 -right-3 bg-white text-blue-700 text-xs font-black min-w-5 h-5 px-1 rounded-full flex items-center justify-center">
+                      {itemCount}
+                    </span>
+                  )}
+                </span>
+                <span className="flex-1 text-left min-w-0">
+                  <span className="block font-bold truncate">
+                    {currentOrder ? currentOrder.name : 'Cuentas abiertas'}
+                  </span>
+                  <span className="block text-xs text-blue-100">
+                    {currentOrder ? `${itemCount} artículo${itemCount === 1 ? '' : 's'}` : `${visibleOrders.length} abierta${visibleOrders.length === 1 ? '' : 's'}`}
+                  </span>
+                </span>
+                {currentOrder && <span className="text-xl font-black">${currentOrder.total.toFixed(2)}</span>}
+                <span className="text-xl">›</span>
+              </button>
+            )}
+
+            {/* Cart Panel - pantalla completa en teléfono, panel lateral desde tablet */}
             <aside
-              className={`absolute inset-0 z-40 bg-black md:static md:w-[400px] lg:w-[450px] border-l border-zinc-800 shrink-0 transform transition-transform duration-300 ease-in-out ${isMobileCartOpen ? 'translate-x-0' : 'translate-x-full md:translate-x-0'
+              className={`absolute inset-0 z-40 bg-black md:static md:w-[340px] lg:w-[400px] xl:w-[450px] border-l border-zinc-800 shrink-0 transform transition-transform duration-300 ease-in-out ${isMobileCartOpen ? 'translate-x-0' : 'translate-x-full md:translate-x-0'
                 }`}
             >
               <div className="h-full flex flex-col">
                 {/* Mobile Cart Header with Close button */}
-                <div className="md:hidden flex items-center justify-between p-4 border-b border-zinc-800 bg-zinc-900">
-                  <h2 className="text-xl font-bold text-white">Cuenta Actual</h2>
+                <div className="md:hidden flex items-center justify-between px-4 py-2 border-b border-zinc-800 bg-zinc-900">
                   <button
                     onClick={() => setIsMobileCartOpen(false)}
-                    className="w-10 h-10 flex items-center justify-center bg-zinc-800 rounded-full text-white font-bold text-xl"
+                    className="flex items-center gap-1 text-blue-400 font-bold py-2"
+                  >
+                    ‹ Seguir agregando
+                  </button>
+                  <button
+                    onClick={() => setIsMobileCartOpen(false)}
+                    className="w-10 h-10 flex items-center justify-center bg-zinc-800 rounded-full text-white font-bold text-lg"
+                    aria-label="Cerrar cuenta"
                   >
                     ✕
                   </button>
                 </div>
 
                 {/* The actual Cart */}
-                <div className="flex-1 overflow-hidden">
+                <div className="flex-1 min-h-0 overflow-hidden">
                   <Cart />
                 </div>
               </div>
@@ -147,151 +222,68 @@ function App() {
            <KitchenView /> // Fallback for kitchen
         )}
 
-        {/* Right Fixed Sidebar for Menus */}
-        <aside className="w-20 md:w-24 bg-zinc-950 border-l border-zinc-800 flex flex-col items-center py-6 gap-6 shrink-0 z-50 shadow-2xl overflow-y-auto">
-          
-          {/* Menú View Toggle - Not for kitchen */}
-          {activeUser.role !== 'kitchen' && (
-            <button
-              onClick={() => setActiveView('pos')}
-              className={`w-14 h-14 md:w-16 md:h-16 flex flex-col items-center justify-center gap-1 rounded-2xl transition-colors ${activeView === 'pos'
-                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
-                  : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-100'
-                }`}
-            >
-              <span className="text-2xl">🍽️</span>
-              <span className="text-[10px] md:text-xs font-bold">Menú</span>
-            </button>
-          )}
-
-          {/* Cocina View Toggle */}
-          <button
-            onClick={() => setActiveView('kitchen')}
-            className={`w-14 h-14 md:w-16 md:h-16 flex flex-col items-center justify-center gap-1 rounded-2xl transition-colors ${activeView === 'kitchen'
-                ? 'bg-orange-600 text-white shadow-lg shadow-orange-600/20'
-                : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-100'
-              }`}
-          >
-            <span className="text-2xl">👨‍🍳</span>
-            <span className="text-[10px] md:text-xs font-bold">Por Cocinar</span>
-          </button>
-          
-          {/* Caja View Toggle - Not for kitchen */}
-          {activeUser.role !== 'kitchen' && (
-            <button
-              onClick={() => setActiveView('checkout')}
-              className={`w-14 h-14 md:w-16 md:h-16 flex flex-col items-center justify-center gap-1 rounded-2xl transition-colors ${activeView === 'checkout'
-                  ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20'
-                  : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-100'
-                }`}
-            >
-              <span className="text-2xl">💰</span>
-              <span className="text-[10px] md:text-xs font-bold">Caja</span>
-            </button>
-          )}
-
-          {/* Dashboard View Toggle - Only for Admin */}
-          {activeUser.role === 'admin' && (
-            <button
-              onClick={() => setActiveView('dashboard')}
-              className={`w-14 h-14 md:w-16 md:h-16 flex flex-col items-center justify-center gap-1 rounded-2xl transition-colors ${activeView === 'dashboard'
-                  ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/20'
-                  : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-100'
-                }`}
-            >
-              <span className="text-2xl">📈</span>
-              <span className="text-[10px] md:text-xs font-bold">Analítica</span>
-            </button>
-          )}
-
-          {/* Users Admin Toggle - Only for Admin */}
-          {activeUser.role === 'admin' && (
-            <button
-              onClick={() => setActiveView('users')}
-              className={`w-14 h-14 md:w-16 md:h-16 flex flex-col items-center justify-center gap-1 rounded-2xl transition-colors ${activeView === 'users'
-                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20'
-                  : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-100'
-                }`}
-            >
-              <span className="text-2xl">👥</span>
-              <span className="text-[10px] md:text-xs font-bold">Usuarios</span>
-            </button>
-          )}
-
-          {/* Inventario - Only for Admin */}
-          {activeUser.role === 'admin' && (
-            <button
-              onClick={() => setActiveView('inventory')}
-              className={`w-14 h-14 md:w-16 md:h-16 flex flex-col items-center justify-center gap-1 rounded-2xl transition-colors ${activeView === 'inventory'
-                  ? 'bg-amber-600 text-white shadow-lg shadow-amber-600/20'
-                  : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-100'
-                }`}
-            >
-              <span className="text-2xl">📦</span>
-              <span className="text-[10px] md:text-xs font-bold">Inventario</span>
-            </button>
-          )}
-
-          {/* Impresora - Only for Admin */}
-          {activeUser.role === 'admin' && (
-            <button
-              onClick={() => setActiveView('printer')}
-              className={`w-14 h-14 md:w-16 md:h-16 flex flex-col items-center justify-center gap-1 rounded-2xl transition-colors ${activeView === 'printer'
-                  ? 'bg-slate-600 text-white shadow-lg shadow-slate-600/20'
-                  : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-100'
-                }`}
-            >
-              <span className="text-2xl">🖨️</span>
-              <span className="text-[10px] md:text-xs font-bold">Impresora</span>
-            </button>
-          )}
-
-          {/* Cuentas (Mobile Cart Toggle) - Not for kitchen */}
-          {activeUser.role !== 'kitchen' && (
-            <button
-              onClick={() => setIsMobileCartOpen(!isMobileCartOpen)}
-              className={`md:hidden w-14 h-14 md:w-16 md:h-16 flex flex-col items-center justify-center gap-1 rounded-2xl transition-colors relative border ${isMobileCartOpen
-                  ? 'bg-blue-600/20 text-blue-400 border-blue-500/30'
-                  : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-100 border-transparent'
-                }`}
-              disabled={activeView !== 'pos'}
-            >
-              <span className="text-2xl">🧾</span>
-              <span className="text-[10px] md:text-xs font-bold">Cuentas</span>
-              {itemCount > 0 && activeView === 'pos' && (
-                <span className="absolute -top-2 -right-2 bg-blue-500 text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center">
-                  {itemCount}
-                </span>
-              )}
-            </button>
-          )}
-
-          <div className="mt-auto flex flex-col gap-6">
-            {/* Pagadas (Historial) - Only Admin */}
-            {activeUser.role === 'admin' && (
-              <button
-                onClick={() => setIsHistoryOpen(true)}
-                className="w-14 h-14 md:w-16 md:h-16 flex flex-col items-center justify-center gap-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 rounded-2xl transition-colors"
-                title="Corte de Caja"
-              >
-                <span className="text-2xl">✂️</span>
-                <span className="text-[10px] md:text-xs font-bold">Corte</span>
-              </button>
-            )}
-
-            {/* Profile Indicator */}
-            <div
-              className={`w-14 h-14 md:w-16 md:h-16 flex flex-col items-center justify-center gap-1 rounded-2xl transition-colors border bg-blue-600/20 text-blue-400 border-blue-500/30 cursor-default`}
-              title={activeUser.name}
-            >
-              <span className="text-2xl">👤</span>
-              <span className="text-[10px] md:text-xs font-bold truncate w-full px-1 text-center">
-                {activeUser.username}
-              </span>
-            </div>
-          </div>
-        </aside>
+        {/* Barra lateral (tablet y computadora) */}
+        {showNav && (
+          <aside className="hidden md:flex w-20 lg:w-24 bg-zinc-950 border-l border-zinc-800 flex-col items-center py-4 gap-3 lg:gap-4 shrink-0 z-30 overflow-y-auto">
+            {navItems.map(item => (
+              <RailButton
+                key={item.key}
+                item={item}
+                active={item.key === activeView}
+                badge={badgeFor(item.key)}
+                onClick={() => handleNav(item.key)}
+                className={item.key === 'corte' ? 'mt-auto' : ''}
+              />
+            ))}
+          </aside>
+        )}
       </div>
+
+      {/* Barra inferior (teléfono) */}
+      {showNav && (
+        <nav className="md:hidden relative shrink-0 bg-zinc-950 border-t border-zinc-800 flex pb-safe z-30">
+          {mobilePrimary.map(item => (
+            <BottomButton
+              key={item.key}
+              item={item}
+              active={item.key === activeView && !isMoreOpen}
+              badge={badgeFor(item.key)}
+              onClick={() => handleNav(item.key)}
+            />
+          ))}
+          {needsMore && (
+            <BottomButton
+              item={{ key: 'pos', icon: '☰', label: 'Más', roles: [], activeClass: '' }}
+              active={isMoreOpen || mobileMore.some(i => i.key === activeView)}
+              onClick={() => setIsMoreOpen(o => !o)}
+            />
+          )}
+        </nav>
+      )}
+
+      {/* Menú "Más" (teléfono) */}
+      {isMoreOpen && (
+        <div className="md:hidden fixed inset-0 z-20 bg-black/70 backdrop-blur-sm flex items-end" onClick={() => setIsMoreOpen(false)}>
+          <div
+            className="w-full bg-zinc-900 border-t border-zinc-700 rounded-t-3xl p-4 pb-24 grid grid-cols-3 gap-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="col-span-3 mx-auto w-10 h-1.5 rounded-full bg-zinc-700 mb-1" />
+            {mobileMore.map(item => (
+              <button
+                key={item.key}
+                onClick={() => handleNav(item.key)}
+                className={`flex flex-col items-center gap-1 py-4 rounded-2xl font-bold text-sm ${
+                  item.key === activeView ? item.activeClass : 'bg-zinc-800 text-zinc-200 active:bg-zinc-700'
+                }`}
+              >
+                <span className="text-2xl">{item.icon}</span>
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Modals */}
       {activeUser.role === 'admin' && (
@@ -304,12 +296,12 @@ function App() {
       {/* Alert Popup (Toast/Modal) */}
       {activeAlert && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-zinc-900 border border-emerald-500/30 rounded-3xl p-8 max-w-md w-full shadow-2xl flex flex-col items-center text-center animate-in zoom-in-95 duration-200">
-            <div className="w-24 h-24 bg-emerald-500/20 rounded-full flex items-center justify-center mb-6">
-              <span className="text-6xl">✅</span>
+          <div className="bg-zinc-900 border border-emerald-500/30 rounded-3xl p-6 md:p-8 max-w-md w-full shadow-2xl flex flex-col items-center text-center animate-in zoom-in-95 duration-200">
+            <div className="w-20 h-20 md:w-24 md:h-24 bg-emerald-500/20 rounded-full flex items-center justify-center mb-4 md:mb-6">
+              <span className="text-5xl md:text-6xl">✅</span>
             </div>
-            <h2 className="text-3xl font-bold text-white mb-2">¡Atención {activeAlert.waiter}!</h2>
-            <p className="text-xl text-zinc-300 mb-8 leading-relaxed">
+            <h2 className="text-2xl md:text-3xl font-bold text-white mb-2">¡Atención {activeAlert.waiter}!</h2>
+            <p className="text-lg md:text-xl text-zinc-300 mb-6 md:mb-8 leading-relaxed">
               {activeAlert.message}
             </p>
 
@@ -323,6 +315,52 @@ function App() {
         </div>
       )}
     </div>
+  );
+}
+
+function Badge({ count }: { count: number }) {
+  if (!count) return null;
+  return (
+    <span className="absolute -top-1.5 -right-1.5 bg-orange-500 text-white text-[11px] font-black min-w-5 h-5 px-1 rounded-full flex items-center justify-center">
+      {count}
+    </span>
+  );
+}
+
+function RailButton({ item, active, badge, onClick, className = '' }: {
+  item: NavItem; active: boolean; badge: number; onClick: () => void; className?: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title={item.label}
+      className={`relative w-16 h-16 lg:w-[72px] lg:h-[72px] shrink-0 flex flex-col items-center justify-center gap-1 rounded-2xl transition-colors ${className} ${
+        active ? item.activeClass : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-100'
+      }`}
+    >
+      <span className="text-2xl leading-none">{item.icon}</span>
+      <span className="text-[10px] lg:text-xs font-bold leading-tight text-center px-0.5">{item.label}</span>
+      <Badge count={badge} />
+    </button>
+  );
+}
+
+function BottomButton({ item, active, badge = 0, onClick }: {
+  item: NavItem; active: boolean; badge?: number; onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex-1 min-w-0 flex flex-col items-center justify-center gap-0.5 py-2 transition-colors ${
+        active ? 'text-white' : 'text-zinc-500 active:text-zinc-300'
+      }`}
+    >
+      <span className={`relative text-xl leading-none px-3 py-1 rounded-full ${active ? 'bg-zinc-800' : ''}`}>
+        {item.icon}
+        <Badge count={badge} />
+      </span>
+      <span className="text-[11px] font-bold truncate max-w-full">{item.label}</span>
+    </button>
   );
 }
 

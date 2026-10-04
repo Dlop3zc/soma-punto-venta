@@ -49,23 +49,23 @@ export default function CheckoutView() {
 
   return (
     <div className="flex-1 h-full bg-zinc-900 flex flex-col overflow-hidden">
-      <div className="p-6 border-b border-zinc-800 bg-zinc-950 flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-white flex items-center gap-3">
+      <div className="page-header flex items-center justify-between gap-3">
+        <h1 className="page-title">
           <span>💰</span> Módulo de Caja
         </h1>
-        <div className="text-zinc-400 font-medium">
-          {openOrders.length} cuenta(s) abierta(s)
+        <div className="text-zinc-400 font-medium text-sm md:text-base whitespace-nowrap">
+          {openOrders.length} abierta{openOrders.length === 1 ? '' : 's'}
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6">
+      <div className="flex-1 overflow-y-auto p-3 md:p-6">
         {openOrders.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-zinc-500 gap-4">
             <span className="text-6xl">🧾</span>
             <p className="text-2xl font-medium">No hay cuentas abiertas</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-6">
             {openOrders.map(order => (
               <div 
                 key={order.id} 

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Minus, Plus, Search } from 'lucide-react';
 import { mockProducts, categories, type Category, type Product } from '../data/mockProducts';
 import { useCartStore } from '../store/useCartStore';
-import { useInventoryStore, DEFAULT_INVENTORY } from '../store/useInventoryStore';
+import { useInventoryStore, DEFAULT_INVENTORY, type InventoryRecord } from '../store/useInventoryStore';
 import { getAvailability, reservedQuantity, LOW_STOCK_THRESHOLD, type AvailabilityStatus } from '../utils/stock';
 
 type Filter = 'todos' | 'alertas' | 'controlados';
@@ -52,27 +52,72 @@ export default function InventoryView() {
     if (Number.isFinite(n) && n >= 0) run(setStock(product.id, n));
   };
 
+  // Controles de existencia (se usan en la tabla y en las tarjetas de teléfono)
+  const stockEditor = (product: Product, record: InventoryRecord, reserved: number) => (
+    record.tracked ? (
+      <div className="flex items-center gap-2 flex-wrap">
+        <button
+          onClick={() => run(adjustStock(product.id, -1))}
+          disabled={record.stock <= 0}
+          className="w-9 h-9 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 flex items-center justify-center disabled:opacity-30"
+        >
+          <Minus size={18} />
+        </button>
+        <input
+          key={record.stock}
+          type="number"
+          min={0}
+          defaultValue={Math.max(0, record.stock)}
+          onBlur={(e) => e.target.value !== String(Math.max(0, record.stock)) && handleStockInput(product, e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+          className="w-20 bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1.5 text-white text-center font-bold focus:outline-none focus:border-blue-500"
+        />
+        <button
+          onClick={() => run(adjustStock(product.id, 1))}
+          className="w-9 h-9 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 flex items-center justify-center"
+        >
+          <Plus size={18} />
+        </button>
+        <button
+          onClick={() => {
+            const value = window.prompt(`¿Cuántas piezas de "${product.name}" llegaron?`);
+            const n = value ? parseInt(value, 10) : NaN;
+            if (Number.isFinite(n) && n > 0) run(adjustStock(product.id, n));
+          }}
+          className="px-3 h-9 rounded-lg bg-emerald-600/20 hover:bg-emerald-600 text-emerald-400 hover:text-white text-sm font-bold"
+        >
+          + Entrada
+        </button>
+        {reserved > 0 && (
+          <span className="text-xs text-zinc-500 ml-1">{reserved} apartada(s) en cuentas</span>
+        )}
+      </div>
+    ) : (
+      <span className="text-zinc-600">—</span>
+    )
+  );
+
   return (
     <div className="flex-1 h-full bg-zinc-900 flex flex-col overflow-hidden">
-      <div className="p-6 border-b border-zinc-800 bg-zinc-950 flex flex-col gap-4">
+      <div className="page-header flex flex-col gap-4">
         <div className="flex items-center justify-between flex-wrap gap-3">
-          <h1 className="text-3xl font-bold text-white flex items-center gap-3">
+          <h1 className="page-title">
             <span>📦</span> Inventario
           </h1>
-          <p className="text-zinc-400 text-sm max-w-xl">
+          <p className="hidden md:block text-zinc-400 text-sm max-w-xl">
             El stock se descuenta al enviar a cocina (o al cobrar si nunca se envió). Lo que se marque como agotado o
             no disponible aparece bloqueado en la carta. Stock bajo: {LOW_STOCK_THRESHOLD} piezas o menos.
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-3 items-center">
-          <div className="relative">
+        <div className="flex flex-wrap gap-2 md:gap-3 items-center">
+          <div className="relative w-full sm:w-auto">
             <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar producto"
-              className="bg-zinc-800 border border-zinc-700 rounded-xl pl-10 pr-4 py-2 text-white focus:outline-none focus:border-blue-500"
+              className="w-full bg-zinc-800 border border-zinc-700 rounded-xl pl-10 pr-4 py-2 text-white focus:outline-none focus:border-blue-500"
             />
           </div>
           <select
@@ -90,7 +135,7 @@ export default function InventoryView() {
             <button
               key={key}
               onClick={() => setFilter(key)}
-              className={`px-4 py-2 rounded-xl font-bold transition-colors ${
+              className={`px-3 md:px-4 py-2 rounded-xl text-sm md:text-base font-bold transition-colors ${
                 filter === key ? 'bg-blue-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
               }`}
             >
@@ -101,8 +146,41 @@ export default function InventoryView() {
         {error && <p className="text-red-400 font-medium">{error}</p>}
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6">
-        <div className="bg-zinc-950 border border-zinc-800 rounded-2xl overflow-x-auto">
+      <div className="flex-1 overflow-y-auto p-3 md:p-6">
+        {/* Teléfono: tarjetas */}
+        <div className="md:hidden space-y-3">
+          {visible.map(({ product, record, reserved, availability }) => {
+            const style = STATUS_STYLE[availability.status];
+            return (
+              <div key={product.id} className="bg-zinc-950 border border-zinc-800 rounded-2xl p-4 space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-white font-bold leading-tight">{product.name}</p>
+                    <p className="text-zinc-500 text-sm">{product.category} · ${product.price.toFixed(2)}</p>
+                  </div>
+                  <span className={`shrink-0 text-xs font-bold px-2 py-1 rounded-full border ${style.className}`}>
+                    {style.label}
+                  </span>
+                </div>
+                <div className="flex items-center gap-6 text-sm text-zinc-400">
+                  <label className="flex items-center gap-2">
+                    <Toggle checked={record.available} onChange={(v) => run(setAvailable(product.id, v))} label="En carta" />
+                    En carta
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <Toggle checked={record.tracked} onChange={(v) => run(setTracked(product.id, v))} label="Contar piezas" />
+                    Contar piezas
+                  </label>
+                </div>
+                {record.tracked && stockEditor(product, record, reserved)}
+              </div>
+            );
+          })}
+          {visible.length === 0 && <p className="p-12 text-center text-zinc-500">No hay productos con ese filtro.</p>}
+        </div>
+
+        {/* Tablet y computadora: tabla */}
+        <div className="hidden md:block bg-zinc-950 border border-zinc-800 rounded-2xl overflow-x-auto">
           <table className="w-full text-left border-collapse min-w-[760px]">
             <thead>
               <tr className="bg-zinc-900 text-zinc-400 text-sm">
@@ -142,47 +220,7 @@ export default function InventoryView() {
                       />
                     </td>
                     <td className="p-4">
-                      {record.tracked ? (
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => run(adjustStock(product.id, -1))}
-                            disabled={record.stock <= 0}
-                            className="w-9 h-9 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 flex items-center justify-center disabled:opacity-30"
-                          >
-                            <Minus size={18} />
-                          </button>
-                          <input
-                            key={record.stock}
-                            type="number"
-                            min={0}
-                            defaultValue={Math.max(0, record.stock)}
-                            onBlur={(e) => e.target.value !== String(Math.max(0, record.stock)) && handleStockInput(product, e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
-                            className="w-20 bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1.5 text-white text-center font-bold focus:outline-none focus:border-blue-500"
-                          />
-                          <button
-                            onClick={() => run(adjustStock(product.id, 1))}
-                            className="w-9 h-9 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 flex items-center justify-center"
-                          >
-                            <Plus size={18} />
-                          </button>
-                          <button
-                            onClick={() => {
-                              const value = window.prompt(`¿Cuántas piezas de "${product.name}" llegaron?`);
-                              const n = value ? parseInt(value, 10) : NaN;
-                              if (Number.isFinite(n) && n > 0) run(adjustStock(product.id, n));
-                            }}
-                            className="px-3 h-9 rounded-lg bg-emerald-600/20 hover:bg-emerald-600 text-emerald-400 hover:text-white text-sm font-bold"
-                          >
-                            + Entrada
-                          </button>
-                          {reserved > 0 && (
-                            <span className="text-xs text-zinc-500 ml-1">{reserved} apartada(s) en cuentas</span>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="text-zinc-600">—</span>
-                      )}
+                      {stockEditor(product, record, reserved)}
                     </td>
                   </tr>
                 );

@@ -64,11 +64,11 @@ export default function SplitBillModal({ isOpen, onClose }: SplitBillModalProps)
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-      <div className="bg-zinc-900 border border-zinc-700 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+    <div className="modal-backdrop">
+      <div className="modal-panel max-w-2xl">
         
         {/* Header */}
-        <div className="p-6 border-b border-zinc-800 flex items-center justify-between bg-zinc-950">
+        <div className="px-4 py-3 md:p-6 border-b border-zinc-800 flex items-center justify-between bg-zinc-950 shrink-0">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-emerald-500/20 text-emerald-400 rounded-xl">
               <Scissors size={24} />
@@ -83,7 +83,7 @@ export default function SplitBillModal({ isOpen, onClose }: SplitBillModalProps)
           </button>
         </div>
 
-        <div className="p-6 bg-zinc-900 flex-1 overflow-y-auto">
+        <div className="p-4 md:p-6 bg-zinc-900 flex-1 min-h-0 overflow-y-auto">
           <p className="text-zinc-400 mb-6">
             Selecciona los productos que deseas mover a una <strong className="text-white">nueva cuenta separada</strong>.
           </p>
@@ -149,7 +149,7 @@ export default function SplitBillModal({ isOpen, onClose }: SplitBillModalProps)
         </div>
 
         {/* Footer */}
-        <div className="p-6 bg-zinc-950 border-t border-zinc-800 flex items-center justify-between">
+        <div className="p-4 md:p-6 bg-zinc-950 border-t border-zinc-800 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shrink-0">
           <div>
             <p className="text-zinc-500 text-sm font-medium">Cuenta Original quedará en:</p>
             <p className="text-2xl font-bold text-zinc-300">${totalRemaining.toFixed(2)}</p>

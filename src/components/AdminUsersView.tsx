@@ -71,26 +71,26 @@ export default function AdminUsersView() {
 
   return (
     <div className="flex-1 h-full bg-zinc-950 flex flex-col overflow-hidden">
-      <div className="p-6 border-b border-zinc-800 bg-zinc-900/50 sticky top-0 z-10 flex items-center justify-between">
+      <div className="page-header flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold text-white flex items-center gap-3">
+          <h1 className="page-title">
             <span>👥</span> Gestión de Usuarios
           </h1>
-          <p className="text-zinc-400 mt-1">Administra accesos y roles del sistema</p>
+          <p className="text-zinc-400 mt-1 hidden sm:block">Administra accesos y roles del sistema</p>
         </div>
         <button
           onClick={openNewUser}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl font-bold transition-colors"
+          className="shrink-0 flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2.5 rounded-xl font-bold transition-colors"
         >
           <Plus size={20} />
-          Nuevo Usuario
+          <span className="hidden sm:inline">Nuevo Usuario</span><span className="sm:hidden">Nuevo</span>
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+      <div className="flex-1 overflow-y-auto p-3 md:p-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-6">
           {users.map(user => (
-            <div key={user.id} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 flex flex-col relative shadow-xl">
+            <div key={user.id} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 md:p-6 flex flex-col relative shadow-xl">
               <div className="flex justify-between items-start mb-4">
                 <div className={`w-12 h-12 rounded-full flex items-center justify-center text-2xl border ${
                   user.role === 'admin' ? 'bg-purple-500/20 text-purple-400 border-purple-500/30' :
@@ -101,11 +101,11 @@ export default function AdminUsersView() {
                 </div>
                 
                 <div className="flex gap-2">
-                  <button onClick={() => openEditUser(user)} className="text-zinc-400 hover:text-white transition-colors" title="Editar">
+                  <button onClick={() => openEditUser(user)} className="p-2 -m-1 text-zinc-400 hover:text-white transition-colors" title="Editar">
                     <Edit2 size={18} />
                   </button>
                   {user.id !== activeUser?.id && (
-                    <button onClick={() => handleDelete(user)} className="text-zinc-400 hover:text-red-400 transition-colors" title="Eliminar">
+                    <button onClick={() => handleDelete(user)} className="p-2 -m-1 text-zinc-400 hover:text-red-400 transition-colors" title="Eliminar">
                       <Trash2 size={18} />
                     </button>
                   )}
@@ -130,8 +130,8 @@ export default function AdminUsersView() {
       </div>
 
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200">
+        <div className="modal-backdrop">
+          <div className="modal-panel max-w-md p-6 md:p-8 overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-2xl font-bold text-white">
                 {editingUser ? 'Editar Usuario' : 'Nuevo Usuario'}

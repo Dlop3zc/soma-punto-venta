@@ -16,8 +16,8 @@ export default function PrinterSettingsView() {
 
   return (
     <div className="flex-1 h-full bg-zinc-900 flex flex-col overflow-hidden">
-      <div className="p-6 border-b border-zinc-800 bg-zinc-950">
-        <h1 className="text-3xl font-bold text-white flex items-center gap-3">
+      <div className="page-header">
+        <h1 className="page-title">
           <span>🖨️</span> Impresora de Tickets
         </h1>
         <p className="text-zinc-400 mt-1">
@@ -25,7 +25,7 @@ export default function PrinterSettingsView() {
         </p>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6">
+      <div className="flex-1 overflow-y-auto p-3 md:p-6">
         <div className="grid lg:grid-cols-2 gap-6 max-w-6xl">
           {/* Conexión */}
           <Card title="Conexión">

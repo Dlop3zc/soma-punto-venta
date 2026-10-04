@@ -44,10 +44,10 @@ export default function OrderNameModal({ title, confirmLabel, initialName = '', 
 
   // Portal: el panel del carrito usa `transform`, lo que encerraría un modal `fixed` dentro de él
   return createPortal(
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+    <div className="modal-backdrop z-[60]">
       <form
         onSubmit={handleSubmit}
-        className="bg-zinc-900 border border-zinc-700 rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden"
+        className="modal-panel max-w-lg"
       >
         <div className="p-6 border-b border-zinc-800 flex items-center justify-between bg-zinc-950">
           <h2 className="text-2xl font-bold text-white">{title}</h2>
@@ -60,7 +60,7 @@ export default function OrderNameModal({ title, confirmLabel, initialName = '', 
           </button>
         </div>
 
-        <div className="p-6 space-y-5">
+        <div className="p-4 md:p-6 space-y-5 overflow-y-auto min-h-0">
           <div>
             <label className="block text-zinc-400 font-medium mb-2">Nombre de la cuenta (mesa o cliente)</label>
             <input

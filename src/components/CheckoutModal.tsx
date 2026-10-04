@@ -95,12 +95,12 @@ export default function CheckoutModal({ orderId, onClose }: CheckoutModalProps) 
   if (paidOrder) {
     return (
       <Shell onClose={onClose} title={`${paidOrder.name} · Cobrada`}>
-        <div className="p-10 flex flex-col items-center text-center gap-6">
+        <div className="p-6 md:p-10 flex flex-col items-center text-center gap-5 md:gap-6 overflow-y-auto">
           <CheckCircle2 size={72} className="text-emerald-400" />
           {paidOrder.paymentMethod === 'Efectivo' ? (
             <div>
               <p className="text-zinc-400 text-2xl font-medium">Cambio a devolver</p>
-              <p className="text-7xl font-black text-emerald-400">{money(paidOrder.change || 0)}</p>
+              <p className="text-6xl md:text-7xl font-black text-emerald-400">{money(paidOrder.change || 0)}</p>
             </div>
           ) : (
             <p className="text-3xl font-bold text-white">Pago con tarjeta registrado</p>
@@ -130,7 +130,7 @@ export default function CheckoutModal({ orderId, onClose }: CheckoutModalProps) 
         </div>
         <button
           onClick={onClose}
-          className="py-6 text-2xl font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition-colors"
+          className="py-5 md:py-6 text-2xl font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition-colors shrink-0"
         >
           Listo
         </button>
@@ -141,7 +141,7 @@ export default function CheckoutModal({ orderId, onClose }: CheckoutModalProps) 
   // ---------- Formulario de cobro ----------
   return (
     <Shell onClose={onClose} title={`Cobrar ${order!.name}`}>
-      <div className="grid md:grid-cols-2 gap-6 p-6 overflow-y-auto">
+      <div className="grid md:grid-cols-2 gap-5 md:gap-6 p-4 md:p-6 overflow-y-auto min-h-0">
         <div className="space-y-6">
           {/* Método */}
           <div className="grid grid-cols-2 gap-3">
@@ -149,7 +149,7 @@ export default function CheckoutModal({ orderId, onClose }: CheckoutModalProps) 
               <button
                 key={m}
                 onClick={() => setMethod(m)}
-                className={`py-5 rounded-2xl text-2xl font-black tracking-wider transition-colors ${
+                className={`py-4 md:py-5 rounded-2xl text-xl md:text-2xl font-black tracking-wider transition-colors ${
                   method === m
                     ? m === 'Efectivo' ? 'bg-emerald-600 text-white' : 'bg-blue-600 text-white'
                     : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
@@ -263,7 +263,7 @@ export default function CheckoutModal({ orderId, onClose }: CheckoutModalProps) 
                   className="w-full bg-zinc-800 border-2 border-zinc-700 text-white text-3xl font-bold rounded-xl py-4 pl-12 pr-4 focus:outline-none focus:border-emerald-500"
                 />
               </div>
-              <div className="grid grid-cols-4 gap-2 mt-2">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2">
                 {quickCash.map(a => (
                   <button
                     key={a}
@@ -280,7 +280,7 @@ export default function CheckoutModal({ orderId, onClose }: CheckoutModalProps) 
 
         {/* Resumen */}
         <div className="flex flex-col gap-4">
-          <div className="bg-zinc-950 rounded-2xl border border-zinc-800 p-6 space-y-3 text-lg">
+          <div className="bg-zinc-950 rounded-2xl border border-zinc-800 p-4 md:p-6 space-y-2 md:space-y-3 text-base md:text-lg">
             <Row label="Subtotal" value={money(subtotal)} />
             {discount > 0 && <Row label="Descuento" value={`-${money(discount)}`} className="text-amber-400" />}
             <Row label="Total venta" value={money(total)} className="text-white font-bold" />
@@ -290,7 +290,7 @@ export default function CheckoutModal({ orderId, onClose }: CheckoutModalProps) 
               className="text-sky-300"
             />
             <div className="border-t border-zinc-800 pt-3">
-              <Row label="Total a cobrar" value={money(grandTotal)} className="text-3xl font-black text-white" />
+              <Row label="Total a cobrar" value={money(grandTotal)} className="text-2xl md:text-3xl font-black text-white" />
             </div>
             {method === 'Efectivo' && (
               <Row
@@ -318,7 +318,7 @@ export default function CheckoutModal({ orderId, onClose }: CheckoutModalProps) 
           <button
             onClick={handlePay}
             disabled={!canPay}
-            className={`mt-auto w-full py-6 text-2xl font-black rounded-2xl uppercase tracking-wider transition-colors ${
+            className={`mt-auto w-full py-5 md:py-6 text-xl md:text-2xl font-black rounded-2xl uppercase tracking-wider transition-colors ${
               canPay
                 ? 'bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-zinc-950 shadow-xl shadow-emerald-500/20'
                 : 'bg-zinc-800 text-zinc-600 cursor-not-allowed'
@@ -334,9 +334,9 @@ export default function CheckoutModal({ orderId, onClose }: CheckoutModalProps) 
 
 function Shell({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-      <div className="bg-zinc-900 border border-zinc-700 rounded-3xl w-full max-w-5xl max-h-[95vh] overflow-hidden shadow-2xl flex flex-col">
-        <div className="p-6 border-b border-zinc-800 flex items-center justify-between bg-zinc-950">
+    <div className="modal-backdrop">
+      <div className="modal-panel max-w-5xl">
+        <div className="px-4 py-3 md:p-6 border-b border-zinc-800 flex items-center justify-between gap-3 bg-zinc-950 shrink-0">
           <h2 className="text-2xl md:text-3xl font-bold text-white truncate">{title}</h2>
           <button
             onClick={onClose}

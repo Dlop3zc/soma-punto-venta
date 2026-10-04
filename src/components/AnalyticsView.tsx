@@ -52,6 +52,7 @@ export default function AnalyticsView() {
   const inventory = useInventoryStore(s => s.inventory);
   const [preset, setPreset] = useState<PeriodPreset>('7d');
   const [custom, setCustom] = useState({ from: '', to: '' });
+  const isNarrow = typeof window !== 'undefined' && window.innerWidth < 640;
 
   const range = useMemo(() => rangeForPreset(preset, new Date(), custom), [preset, custom]);
   const prev = useMemo(() => previousRange(range), [range]);
@@ -89,21 +90,21 @@ export default function AnalyticsView() {
   return (
     <div className="flex-1 h-full overflow-y-auto bg-zinc-950">
       {/* Encabezado y filtros */}
-      <div className="sticky top-0 z-20 bg-zinc-950/95 backdrop-blur border-b border-zinc-800 p-4 md:p-6 flex flex-col gap-4">
+      <div className="sticky top-0 z-20 bg-zinc-950/95 backdrop-blur border-b border-zinc-800 px-3 py-3 md:p-6 flex flex-col gap-3 md:gap-4">
         <div className="flex items-end justify-between flex-wrap gap-2">
           <div>
-            <h1 className="text-3xl font-bold text-white flex items-center gap-3"><span>📈</span> Analítica Avanzada</h1>
-            <p className="text-zinc-400 mt-1">
+            <h1 className="page-title"><span>📈</span> Analítica Avanzada</h1>
+            <p className="text-zinc-400 mt-1 text-sm md:text-base">
               {rangeLabel} <span className="text-zinc-600">· comparado con {prevLabel}</span>
             </p>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex md:flex-wrap items-center gap-2 overflow-x-auto scrollbar-hide -mx-3 px-3 md:mx-0 md:px-0">
           {PRESETS.map(p => (
             <button
               key={p.key}
               onClick={() => setPreset(p.key)}
-              className={`px-4 py-2 rounded-xl font-bold transition-colors ${
+              className={`shrink-0 px-3 md:px-4 py-2 rounded-xl text-sm md:text-base font-bold transition-colors ${
                 preset === p.key ? 'bg-blue-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
               }`}
             >
@@ -111,7 +112,7 @@ export default function AnalyticsView() {
             </button>
           ))}
           {preset === 'personalizado' && (
-            <div className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-1.5">
+            <div className="shrink-0 flex items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-1.5">
               <input
                 type="date"
                 value={custom.from}
@@ -130,13 +131,13 @@ export default function AnalyticsView() {
         </div>
       </div>
 
-      <div className="p-4 md:p-6 space-y-6">
+      <div className="p-3 md:p-6 space-y-4 md:space-y-6">
         {/* KPIs */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-          <div className="lg:row-span-2 bg-zinc-900 rounded-2xl p-6 border border-zinc-800 flex flex-col justify-between">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+          <div className="col-span-2 lg:col-span-1 lg:row-span-2 bg-zinc-900 rounded-2xl p-5 md:p-6 border border-zinc-800 flex flex-col justify-between">
             <div>
               <p className="text-zinc-400 font-medium">Ventas netas</p>
-              <p className="text-5xl xl:text-6xl font-bold text-white mt-2 tracking-tight">{money(kpis.revenue)}</p>
+              <p className="text-4xl sm:text-5xl xl:text-6xl font-bold text-white mt-2 tracking-tight">{money(kpis.revenue)}</p>
               <Delta value={delta(kpis.revenue, prevKpis.revenue)} />
             </div>
             <p className="text-zinc-500 text-sm mt-4">
@@ -174,7 +175,7 @@ export default function AnalyticsView() {
               subtitle="Periodo actual contra el periodo anterior de la misma duración"
               legend={[{ color: C.series1, label: 'Actual' }, { color: C.previous, label: 'Anterior' }]}
             >
-              <div className="h-72">
+              <div className="h-56 md:h-72">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={data.timeline.points} margin={{ top: 8, right: 16, bottom: 0, left: 0 }}>
                     <CartesianGrid stroke={C.grid} vertical={false} />
@@ -191,7 +192,7 @@ export default function AnalyticsView() {
               </div>
             </Panel>
 
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 md:gap-6">
               {/* Mapa de calor */}
               <Panel title="Horas pico" subtitle="Ventas por día de la semana y hora del cobro">
                 <HeatmapGrid heatmap={data.heatmap} />
@@ -201,9 +202,9 @@ export default function AnalyticsView() {
               <Panel title="Ventas por categoría" subtitle="Ingreso a precio de carta">
                 <div style={{ height: Math.max(160, data.categories.length * 36) }}>
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={data.categories} layout="vertical" margin={{ top: 0, right: 64, bottom: 0, left: 0 }}>
+                    <BarChart data={data.categories} layout="vertical" margin={{ top: 0, right: 48, bottom: 0, left: 0 }}>
                       <XAxis type="number" hide />
-                      <YAxis type="category" dataKey="category" {...axisProps} axisLine={false} width={150} />
+                      <YAxis type="category" dataKey="category" {...axisProps} axisLine={false} width={isNarrow ? 104 : 150} />
                       <Tooltip {...tooltipStyle} cursor={{ fill: '#27272a' }} formatter={(v) => money(Number(v))} />
                       <Bar dataKey="revenue" name="Ventas" fill={C.series1} radius={[0, 4, 4, 0]} maxBarSize={24}>
                         <LabelList dataKey="share" position="right" fill="#d4d4d8" fontSize={12} formatter={(v) => pct(Number(v))} />
@@ -222,7 +223,7 @@ export default function AnalyticsView() {
               <ProductTable products={data.products} />
             </Panel>
 
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 md:gap-6">
               {/* Meseros */}
               <Panel title="Desempeño por mesero">
                 <div className="overflow-x-auto">
@@ -256,7 +257,7 @@ export default function AnalyticsView() {
                 legend={[{ color: C.series1, label: 'Tarjeta' }, { color: C.series2, label: 'Efectivo' }]}
               >
                 <PaymentBar payments={data.payments} />
-                <div className="grid grid-cols-2 gap-4 mt-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4 mt-6">
                   {data.payments.map(p => (
                     <div key={p.method} className="bg-zinc-950 rounded-xl p-4 border border-zinc-800">
                       <p className="text-zinc-400 text-sm flex items-center gap-2">
@@ -271,14 +272,14 @@ export default function AnalyticsView() {
               </Panel>
             </div>
 
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 md:gap-6">
               {/* Cocina */}
               <Panel title="Tiempos de cocina" subtitle={`Del envío a cocina a "Orden lista" · tarde = más de ${LATE_MS / 60000} min`}>
                 {data.kitchen.count === 0 ? (
                   <p className="text-zinc-500">No hay platillos con tiempos registrados en este periodo.</p>
                 ) : (
                   <>
-                    <div className="grid grid-cols-3 gap-4 mb-6">
+                    <div className="grid grid-cols-3 gap-2 md:gap-4 mb-6">
                       <MiniStat label="Promedio" value={`${minutes(data.kitchen.avgMs)} min`} />
                       <MiniStat label="Platillos" value={data.kitchen.count.toLocaleString('es-MX')} />
                       <MiniStat
@@ -373,7 +374,7 @@ function Panel({ title, subtitle, legend, children }: {
   title: string; subtitle?: string; legend?: { color: string; label: string }[]; children: ReactNode;
 }) {
   return (
-    <section className="bg-zinc-900 rounded-2xl p-6 border border-zinc-800">
+    <section className="bg-zinc-900 rounded-2xl p-4 md:p-6 border border-zinc-800 min-w-0">
       <div className="flex items-start justify-between gap-4 mb-5 flex-wrap">
         <div>
           <h2 className="text-xl font-bold text-white">{title}</h2>
@@ -409,9 +410,9 @@ function Delta({ value, upIsGood = true }: { value: number | null; upIsGood?: bo
 
 function Stat({ label, value, sub, d, upIsGood }: { label: string; value: string; sub?: string; d?: number | null; upIsGood?: boolean }) {
   return (
-    <div className="bg-zinc-900 rounded-2xl p-5 border border-zinc-800">
-      <p className="text-zinc-400 text-sm font-medium">{label}</p>
-      <p className="text-2xl font-bold text-white mt-1">{value}</p>
+    <div className="bg-zinc-900 rounded-2xl p-4 md:p-5 border border-zinc-800 min-w-0">
+      <p className="text-zinc-400 text-xs md:text-sm font-medium">{label}</p>
+      <p className="text-xl md:text-2xl font-bold text-white mt-1 truncate">{value}</p>
       {sub && <p className="text-zinc-500 text-sm">{sub}</p>}
       {d !== undefined && <Delta value={d} upIsGood={upIsGood} />}
     </div>
@@ -420,9 +421,9 @@ function Stat({ label, value, sub, d, upIsGood }: { label: string; value: string
 
 function MiniStat({ label, value, warn }: { label: string; value: string; warn?: boolean }) {
   return (
-    <div className="bg-zinc-950 rounded-xl p-4 border border-zinc-800">
+    <div className="bg-zinc-950 rounded-xl p-3 md:p-4 border border-zinc-800">
       <p className="text-zinc-500 text-sm">{label}</p>
-      <p className={`text-2xl font-bold ${warn ? 'text-amber-400' : 'text-white'}`}>{warn ? '⚠ ' : ''}{value}</p>
+      <p className={`text-lg md:text-2xl font-bold ${warn ? 'text-amber-400' : 'text-white'}`}>{warn ? '⚠ ' : ''}{value}</p>
     </div>
   );
 }

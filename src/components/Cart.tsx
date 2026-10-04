@@ -75,8 +75,8 @@ export default function Cart() {
       {/* Order Tabs Section */}
       <OrderTabs />
 
-      <div className="p-6 border-b border-zinc-800 flex items-center gap-3">
-        <h2 className="text-3xl font-bold text-zinc-100 flex-1 truncate">
+      <div className="px-4 py-3 md:p-5 border-b border-zinc-800 flex items-center gap-3">
+        <h2 className="text-2xl md:text-3xl font-bold text-zinc-100 flex-1 truncate">
           {activeOrder ? activeOrder.name : 'Cuenta Actual'}
         </h2>
         {activeOrder && (
@@ -102,10 +102,12 @@ export default function Cart() {
       </div>
 
       {/* Cart Items */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto p-3 md:p-4 space-y-3">
         {!activeOrder ? (
           <div className="h-full flex items-center justify-center text-zinc-500 text-xl font-medium text-center px-4">
-            No hay ninguna cuenta abierta.<br/>Presiona + o elige un producto para abrir una.
+            {orders.length > 0
+              ? <>Elige una cuenta en las pestañas de arriba<br/>o presiona + para abrir otra.</>
+              : <>No hay ninguna cuenta abierta.<br/>Presiona + o elige un producto para abrir una.</>}
           </div>
         ) : cartItems.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center gap-4 text-zinc-500 text-xl font-medium">
@@ -123,11 +125,11 @@ export default function Cart() {
             const canDecrease = isNew || isAdmin;
 
             return (
-              <div key={item.cartItemId} className="bg-zinc-900 p-4 rounded-xl border border-zinc-800">
-                <div className="flex items-center justify-between">
+              <div key={item.cartItemId} className="bg-zinc-900 p-3 md:p-4 rounded-xl border border-zinc-800">
+                <div className="flex items-center justify-between gap-2">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="text-xl font-bold text-zinc-100">{item.name}</h3>
+                      <h3 className="text-lg md:text-xl font-bold text-zinc-100 leading-tight">{item.name}</h3>
                       {item.status === 'preparando' && (
                         <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-orange-600/20 text-orange-400 border border-orange-500/30">
                           Por Cocinar
@@ -141,12 +143,12 @@ export default function Cart() {
                     </div>
                     <p className="text-emerald-400 font-medium">${item.price.toFixed(2)}</p>
                   </div>
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2 md:gap-3 shrink-0">
                     <button
                       onClick={() => isNew ? run(() => updateQuantity(item.cartItemId, -1)) : handleRemoveSent(item)}
                       disabled={!canDecrease}
                       title={isNew ? undefined : 'Quitar producto enviado (admin)'}
-                      className={`w-12 h-12 rounded-full flex items-center justify-center transition-colors ${
+                      className={`w-11 h-11 md:w-12 md:h-12 rounded-full flex items-center justify-center transition-colors ${
                         !canDecrease
                           ? 'bg-zinc-800 text-zinc-700 cursor-not-allowed'
                           : 'bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-600 text-zinc-300'
@@ -154,11 +156,11 @@ export default function Cart() {
                     >
                       {item.quantity === 1 ? <Trash2 className={canDecrease ? "text-red-400" : ""} size={24} /> : <Minus size={24} />}
                     </button>
-                    <span className="text-2xl font-bold w-8 text-center">{item.quantity}</span>
+                    <span className="text-xl md:text-2xl font-bold w-7 text-center">{item.quantity}</span>
                     <button
                       onClick={() => handleIncrement(item)}
                       disabled={!isNew}
-                      className={`w-12 h-12 rounded-full flex items-center justify-center shadow-lg transition-colors ${
+                      className={`w-11 h-11 md:w-12 md:h-12 rounded-full flex items-center justify-center shadow-lg transition-colors ${
                         !isNew
                           ? 'bg-zinc-800 text-zinc-700 cursor-not-allowed shadow-none'
                           : 'bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white'
@@ -209,16 +211,16 @@ export default function Cart() {
       </div>
 
       {/* Footer / Total */}
-      <div className="p-6 bg-zinc-900 border-t border-zinc-800 flex flex-col gap-4">
-        <div className="flex justify-between items-end mb-2">
-          <span className="text-2xl text-zinc-400 font-medium">Total</span>
-          <span className="text-5xl font-bold text-white">${total.toFixed(2)}</span>
+      <div className="p-4 md:p-5 bg-zinc-900 border-t border-zinc-800 flex flex-col gap-3">
+        <div className="flex justify-between items-end">
+          <span className="text-xl md:text-2xl text-zinc-400 font-medium">Total</span>
+          <span className="text-4xl md:text-5xl font-bold text-white">${total.toFixed(2)}</span>
         </div>
 
         <button
           onClick={() => activeOrder && run(() => sendToKitchen(activeOrder.id))}
           disabled={!hasNewItems}
-          className={`w-full py-4 rounded-2xl text-2xl font-bold transition-all ${
+          className={`w-full py-3 md:py-4 rounded-2xl text-xl md:text-2xl font-bold transition-all ${
             !hasNewItems
               ? 'bg-zinc-800 text-zinc-600 cursor-not-allowed'
               : 'bg-orange-600 hover:bg-orange-500 active:bg-orange-700 text-white shadow-lg shadow-orange-600/20'

@@ -14,14 +14,14 @@ export default function OrderTabs() {
     : orders;
 
   return (
-    <div className="bg-zinc-950 border-b border-zinc-800 p-4 pb-0 flex gap-2 overflow-x-auto scrollbar-hide">
+    <div className="bg-zinc-950 border-b border-zinc-800 px-3 pt-3 md:px-4 md:pt-4 flex gap-1 md:gap-2 overflow-x-auto scrollbar-hide shrink-0">
       {visibleOrders.map(order => {
         const isActive = activeOrderId === order.id;
         return (
           <button
             key={order.id}
             onClick={() => setActiveOrder(order.id)}
-            className={`px-4 py-3 min-w-[140px] border-b-2 font-bold transition-colors text-left flex flex-col ${
+            className={`shrink-0 px-3 md:px-4 py-2.5 md:py-3 min-w-[110px] max-w-[180px] border-b-2 font-bold transition-colors text-left flex flex-col ${
               isActive 
                 ? 'border-blue-500 text-blue-500 bg-blue-500/10' 
                 : 'border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
@@ -36,7 +36,7 @@ export default function OrderTabs() {
       })}
       <button
         onClick={() => setIsNameModalOpen(true)}
-        className="px-4 py-3 rounded-t-xl bg-zinc-900/30 text-emerald-500 hover:bg-zinc-900 hover:text-emerald-400 transition-colors flex items-center justify-center border-t border-x border-transparent"
+        className="shrink-0 px-4 py-3 rounded-t-xl bg-zinc-900/30 text-emerald-500 hover:bg-zinc-900 hover:text-emerald-400 transition-colors flex items-center justify-center border-t border-x border-transparent"
         title="Nueva Cuenta"
       >
         <Plus size={24} />
