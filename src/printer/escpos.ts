@@ -23,7 +23,23 @@ export interface EncoderOptions {
   useAccents: boolean;    // false = quitar acentos si la impresora no soporta PC850
 }
 
-export class EscPosBuilder {
+// Operaciones con las que se arma un ticket. Las implementan EscPosBuilder (bytes para
+// la impresora térmica) y HtmlTicketWriter (impresión con el driver del sistema).
+export interface TicketWriter {
+  readonly columns: number;
+  align(a: Align): this;
+  bold(on: boolean): this;
+  size(width: number, height: number): this;
+  line(t?: string): this;
+  wrapped(t: string, columns?: number, indent?: string): this;
+  separator(ch?: string): this;
+  pair(left: string, right: string, columns?: number): this;
+  feed(lines?: number): this;
+  cut(): this;
+  openDrawer(): this;
+}
+
+export class EscPosBuilder implements TicketWriter {
   private bytes: number[] = [];
   private readonly opts: EncoderOptions;
 
@@ -91,12 +107,7 @@ export class EscPosBuilder {
 
   // Texto a la izquierda y a la derecha en la misma línea
   pair(left: string, right: string, columns = this.opts.columns) {
-    const space = columns - right.length;
-    const lines = wrap(left, Math.max(1, space - 1));
-    lines.forEach((l, i) => {
-      if (i === lines.length - 1) this.line(l.padEnd(space) + right);
-      else this.line(l);
-    });
+    pairLines(left, right, columns).forEach(l => this.line(l));
     return this;
   }
 
@@ -116,6 +127,14 @@ export class EscPosBuilder {
   build(): Uint8Array {
     return new Uint8Array(this.bytes);
   }
+}
+
+// Texto a la izquierda y monto a la derecha; si el texto es largo, se parte en
+// varias líneas y el monto va en la última.
+export function pairLines(left: string, right: string, columns: number): string[] {
+  const space = columns - right.length;
+  const lines = wrap(left, Math.max(1, space - 1));
+  return lines.map((l, i) => (i === lines.length - 1 ? l.padEnd(space) + right : l));
 }
 
 export function wrap(text: string, columns: number): string[] {

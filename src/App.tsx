@@ -52,6 +52,7 @@ function App() {
   const { activeUser, initAuth, initUsersListener, logout } = useAuthStore();
   const initInventoryListener = useInventoryStore(s => s.initInventoryListener);
   const printerConnected = usePrinterStore(s => !!s.transport);
+  const systemPrint = usePrinterStore(s => s.settings.mode === 'system');
   const sessionUid = activeUser?.id;
   const sessionRole = activeUser?.role;
 
@@ -64,7 +65,7 @@ function App() {
     const unsubCart = initListeners();
     const unsubInventory = initInventoryListener();
     // Reconectar sola la impresora autorizada previamente en este navegador
-    usePrinterStore.getState().reconnect();
+    if (usePrinterStore.getState().settings.mode === 'direct') usePrinterStore.getState().reconnect();
     return () => {
       unsubCart();
       unsubInventory();
@@ -140,13 +141,13 @@ function App() {
             {activeUser.role !== 'kitchen' && (
               <span
                 className={`shrink-0 text-xs font-bold px-2.5 md:px-3 py-1 rounded-full border ${
-                  printerConnected
+                  printerConnected || systemPrint
                     ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
                     : 'bg-zinc-800 text-zinc-500 border-zinc-700'
                 }`}
-                title={printerConnected ? 'Impresora conectada' : 'Sin impresora en este equipo'}
+                title={systemPrint ? 'Se imprime con la impresora instalada en este equipo' : printerConnected ? 'Impresora conectada' : 'Sin impresora en este equipo'}
               >
-                🖨️<span className="hidden sm:inline"> {printerConnected ? 'Lista' : 'Sin impresora'}</span>
+                🖨️<span className="hidden sm:inline"> {systemPrint ? 'Sistema' : printerConnected ? 'Lista' : 'Sin impresora'}</span>
               </span>
             )}
             <div className="text-right min-w-0">

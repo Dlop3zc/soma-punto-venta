@@ -94,5 +94,21 @@ y borrar cuentas por completo.
 
 ## Impresora de tickets
 
-Impresión directa ESC/POS por WebUSB o Web Serial. Solo en Chrome o Edge y con la app
-abierta por HTTPS. Se configura en **Impresora** (solo admin).
+Se configura en **Impresora** (solo admin), por equipo. Hay dos modos y el ticket es el mismo
+en ambos:
+
+- **Impresora del sistema** (recomendado en PC/Mac). Usa el driver instalado (la Ofichido de
+  58 mm aparece en Windows como *POS-58*) y el cuadro de impresión del navegador.
+  1. Instalar el driver y conectar la impresora por USB.
+  2. En **Imprimir prueba**, elegir la impresora, papel de 58 mm, márgenes *Ninguno* y sin
+     encabezados/pies de página. Chrome recuerda la elección.
+  3. Para no ver el cuadro de impresión cada vez: abrir la app con un acceso directo de Chrome
+     que tenga `--kiosk-printing` al final del destino.
+
+  En este modo la app no puede abrir el cajón de dinero.
+- **USB directo** (recomendado en Android con cable OTG). Comandos ESC/POS por WebUSB o Web
+  Serial, sin driver; imprime sin cuadro de diálogo y puede abrir el cajón. Solo en Chrome o
+  Edge y con la app abierta por HTTPS. En Windows/Mac normalmente no funciona porque el driver
+  del sistema ya tiene tomada la impresora.
+
+En iPad/iPhone no se puede usar una impresora USB.

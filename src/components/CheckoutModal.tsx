@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { X, Printer, CheckCircle2 } from 'lucide-react';
 import { useCartStore, type PaidOrder, type PaymentMethod } from '../store/useCartStore';
-import { usePrinterStore, TIP_PERCENTAGES } from '../store/usePrinterStore';
+import { usePrinterStore, selectCanPrint, TIP_PERCENTAGES } from '../store/usePrinterStore';
 
 interface CheckoutModalProps {
   orderId: string;
@@ -18,7 +18,8 @@ const parse = (v: string) => {
 // Se monta solo cuando hay una cuenta por cobrar, así el estado empieza limpio cada vez.
 export default function CheckoutModal({ orderId, onClose }: CheckoutModalProps) {
   const { orders, payOrder } = useCartStore();
-  const { transport, settings, printReceipt } = usePrinterStore();
+  const { settings, printReceipt } = usePrinterStore();
+  const canPrint = usePrinterStore(selectCanPrint);
 
   const [method, setMethod] = useState<PaymentMethod>('Efectivo');
   const [discountInput, setDiscountInput] = useState('');
@@ -74,7 +75,7 @@ export default function CheckoutModal({ orderId, onClose }: CheckoutModalProps) 
       });
       if (!paid) throw new Error('No se pudo registrar el pago.');
       setPaidOrder(paid);
-      if (shouldPrint && transport) doPrint(paid);
+      if (shouldPrint && canPrint) doPrint(paid);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo registrar el pago.');
     } finally {
@@ -110,7 +111,7 @@ export default function CheckoutModal({ orderId, onClose }: CheckoutModalProps) 
             {!!paidOrder.tip && <> · Propina {money(paidOrder.tip)}</>}
           </div>
 
-          {transport ? (
+          {canPrint ? (
             <div className="flex flex-col items-center gap-2">
               <button
                 onClick={() => doPrint(paidOrder, printStatus === 'ok')}
@@ -301,7 +302,7 @@ export default function CheckoutModal({ orderId, onClose }: CheckoutModalProps) 
             )}
           </div>
 
-          {transport && (
+          {canPrint && (
             <label className="flex items-center gap-3 text-zinc-300 font-medium cursor-pointer">
               <input
                 type="checkbox"

@@ -1,4 +1,5 @@
-import { EscPosBuilder } from './escpos';
+import { EscPosBuilder, type TicketWriter } from './escpos';
+import { HtmlTicketWriter } from './htmlTicket';
 import type { Order, PaidOrder, CartItem } from '../store/useCartStore';
 
 export interface TicketSettings {
@@ -20,11 +21,21 @@ const formatDate = (ts: number) => {
   return `${d.toLocaleDateString('es-MX')} ${d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}`;
 };
 
-function newBuilder(s: TicketSettings) {
-  return new EscPosBuilder({ columns: columnsFor(s.paperWidth), useAccents: s.useAccents });
+// Cada ticket se escribe una sola vez y sale en dos formatos:
+// bytes ESC/POS (impresión directa) o HTML (impresora del sistema).
+function toEscPos(s: TicketSettings, write: (b: TicketWriter) => void): Uint8Array {
+  const b = new EscPosBuilder({ columns: columnsFor(s.paperWidth), useAccents: s.useAccents });
+  write(b);
+  return b.build();
 }
 
-function header(b: EscPosBuilder, s: TicketSettings) {
+function toHtml(s: TicketSettings, write: (b: TicketWriter) => void): string {
+  const b = new HtmlTicketWriter(columnsFor(s.paperWidth));
+  write(b);
+  return b.build();
+}
+
+function header(b: TicketWriter, s: TicketSettings) {
   b.align('center');
   if (s.businessName.trim()) {
     b.bold(true).size(2, 2).wrapped(s.businessName.trim(), Math.floor(b.columns / 2)).size(1, 1).bold(false);
@@ -33,7 +44,7 @@ function header(b: EscPosBuilder, s: TicketSettings) {
   b.align('left').separator();
 }
 
-function footer(b: EscPosBuilder, s: TicketSettings) {
+function footer(b: TicketWriter, s: TicketSettings) {
   const lines = s.footerLines.split('\n').map(l => l.trim()).filter(Boolean);
   if (lines.length) {
     b.feed(1).align('center');
@@ -43,7 +54,7 @@ function footer(b: EscPosBuilder, s: TicketSettings) {
   b.feed(3).cut();
 }
 
-function itemLines(b: EscPosBuilder, items: CartItem[]) {
+function itemLines(b: TicketWriter, items: CartItem[]) {
   items.forEach(item => {
     b.pair(`${item.quantity}x ${item.name}`, money(item.price * item.quantity));
     if (item.quantity > 1) b.line(`   ${money(item.price)} c/u`);
@@ -51,16 +62,22 @@ function itemLines(b: EscPosBuilder, items: CartItem[]) {
   });
 }
 
-function orderInfo(b: EscPosBuilder, order: Order, dateTs: number) {
+function orderInfo(b: TicketWriter, order: Order, dateTs: number) {
   b.bold(true).line(`Cuenta: ${order.name}`).bold(false);
   b.line(`Atendió: ${order.waiter}`);
   b.line(`Fecha: ${formatDate(dateTs)}`);
   b.separator();
 }
 
+type ReceiptOptions = { reprint?: boolean };
+
 // Ticket de venta (después de cobrar)
-export function buildReceipt(order: PaidOrder, s: TicketSettings, opts: { reprint?: boolean } = {}): Uint8Array {
-  const b = newBuilder(s);
+export const buildReceipt = (order: PaidOrder, s: TicketSettings, opts: ReceiptOptions = {}) =>
+  toEscPos(s, b => writeReceipt(b, order, s, opts));
+export const buildReceiptHtml = (order: PaidOrder, s: TicketSettings, opts: ReceiptOptions = {}) =>
+  toHtml(s, b => writeReceipt(b, order, s, opts));
+
+function writeReceipt(b: TicketWriter, order: PaidOrder, s: TicketSettings, opts: ReceiptOptions) {
   const copies = Math.max(1, Math.min(3, s.copies));
 
   for (let copy = 0; copy < copies; copy++) {
@@ -91,12 +108,15 @@ export function buildReceipt(order: PaidOrder, s: TicketSettings, opts: { reprin
   }
 
   if (s.openDrawerOnCash && order.paymentMethod === 'Efectivo' && !opts.reprint) b.openDrawer();
-  return b.build();
 }
 
 // Pre-cuenta para llevar a la mesa antes de cobrar
-export function buildPreBill(order: Order, s: TicketSettings, tipSuggestions: number[]): Uint8Array {
-  const b = newBuilder(s);
+export const buildPreBill = (order: Order, s: TicketSettings, tipSuggestions: number[]) =>
+  toEscPos(s, b => writePreBill(b, order, s, tipSuggestions));
+export const buildPreBillHtml = (order: Order, s: TicketSettings, tipSuggestions: number[]) =>
+  toHtml(s, b => writePreBill(b, order, s, tipSuggestions));
+
+function writePreBill(b: TicketWriter, order: Order, s: TicketSettings, tipSuggestions: number[]) {
   header(b, s);
   b.align('center').bold(true).line('PRE-CUENTA').bold(false).align('left');
   orderInfo(b, order, Date.now());
@@ -111,13 +131,14 @@ export function buildPreBill(order: Order, s: TicketSettings, tipSuggestions: nu
       b.pair(`  ${p}%  ${money(tip)}`, `Total ${money(order.total + tip)}`);
     });
   }
-  b.feed(1).align('center').line('Este documento no es un comprobante de pago').align('left');
+  b.feed(1).align('center').wrapped('Este documento no es un comprobante de pago').align('left');
   footer(b, s);
-  return b.build();
 }
 
-export function buildTestPage(s: TicketSettings, label: string): Uint8Array {
-  const b = newBuilder(s);
+export const buildTestPage = (s: TicketSettings, label: string) => toEscPos(s, b => writeTestPage(b, s, label));
+export const buildTestPageHtml = (s: TicketSettings, label: string) => toHtml(s, b => writeTestPage(b, s, label));
+
+function writeTestPage(b: TicketWriter, s: TicketSettings, label: string) {
   header(b, s);
   b.align('center').bold(true).line('PRUEBA DE IMPRESIÓN').bold(false).align('left');
   b.line(`Conexión: ${label}`);
@@ -130,5 +151,4 @@ export function buildTestPage(s: TicketSettings, label: string): Uint8Array {
   b.size(2, 2).line('Grande').size(1, 1);
   b.line('1234567890'.repeat(Math.ceil(b.columns / 10)).slice(0, b.columns));
   footer(b, s);
-  return b.build();
 }
