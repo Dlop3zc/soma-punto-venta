@@ -11,6 +11,7 @@ interface ImportMetaEnv {
   readonly VITE_FIREBASE_MEASUREMENT_ID?: string;
   readonly VITE_ENVIRONMENT_LABEL?: string;
   readonly VITE_ADMIN_FUNCTIONS?: string;
+  readonly VITE_PRINTING?: string;
   readonly VITE_USE_EMULATORS?: string;
 }
 

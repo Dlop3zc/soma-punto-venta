@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { X, Printer, CheckCircle2 } from 'lucide-react';
 import { useCartStore, type PaidOrder, type PaymentMethod } from '../store/useCartStore';
-import { usePrinterStore, selectCanPrint, TIP_PERCENTAGES } from '../store/usePrinterStore';
+import { usePrinterStore, selectCanPrint, printingEnabled, TIP_PERCENTAGES } from '../store/usePrinterStore';
 
 interface CheckoutModalProps {
   orderId: string;
@@ -125,7 +125,7 @@ export default function CheckoutModal({ orderId, onClose }: CheckoutModalProps) 
                 <p className="text-red-400 text-sm">{usePrinterStore.getState().lastError || 'No se pudo imprimir.'}</p>
               )}
             </div>
-          ) : (
+          ) : printingEnabled && (
             <p className="text-zinc-500 text-sm">Sin impresora conectada en este equipo.</p>
           )}
         </div>
