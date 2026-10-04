@@ -1,0 +1,137 @@
+rules_version = '2';
+
+// Reglas de seguridad de SOMA Punto de Venta.
+// Desplegar con: npx firebase-tools deploy --only firestore:rules
+// Probar con:    npm run test:rules
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- Quién es quién ----------
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function profilePath(uid) {
+      return /databases/$(database)/documents/users/$(uid);
+    }
+
+    function profile() {
+      return get(profilePath(request.auth.uid)).data;
+    }
+
+    // Con sesión, con perfil y no desactivado
+    function isActive() {
+      return signedIn()
+        && exists(profilePath(request.auth.uid))
+        && profile().active == true;
+    }
+
+    function hasRole(roles) {
+      return isActive() && profile().role in roles;
+    }
+
+    function isAdmin() {
+      return hasRole(['admin']);
+    }
+
+    // Personal de piso: administra cuentas y cobra
+    function isStaff() {
+      return hasRole(['admin', 'waiter']);
+    }
+
+    function changedOnly(keys) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
+    }
+
+    function setupDone() {
+      return exists(/databases/$(database)/documents/config/setup);
+    }
+
+    function validProfile(uid) {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['id', 'username', 'name', 'role', 'active', 'createdAt'])
+        && d.id == uid
+        && d.username is string && d.username.matches('^[a-z0-9._-]{3,30}$')
+        && d.name is string && d.name.size() > 0 && d.name.size() <= 60
+        && d.role in ['admin', 'waiter', 'kitchen']
+        && d.active is bool
+        && d.createdAt is number;
+    }
+
+    // ---------- Usuarios ----------
+    // Ya no se guardan contraseñas aquí: viven en Firebase Authentication.
+    match /users/{uid} {
+      // Cada quien lee su perfil (para saber si está activo); el admin ve todos
+      allow get: if signedIn() && request.auth.uid == uid;
+      allow read: if isAdmin();
+
+      allow create: if
+        // El admin da de alta personal
+        (isAdmin() && validProfile(uid))
+        // Configuración inicial: el primer usuario se crea a sí mismo como admin,
+        // solo una vez y junto con config/setup en el mismo lote
+        || (signedIn()
+            && request.auth.uid == uid
+            && !setupDone()
+            && existsAfter(/databases/$(database)/documents/config/setup)
+            && request.resource.data.role == 'admin'
+            && request.resource.data.active == true
+            && validProfile(uid));
+
+      // El admin edita nombre, rol y estado, pero no puede quitarse a sí mismo el acceso
+      allow update: if isAdmin()
+        && validProfile(uid)
+        && changedOnly(['name', 'role', 'active'])
+        && (uid != request.auth.uid || changedOnly(['name']));
+
+      allow delete: if isAdmin() && uid != request.auth.uid;
+    }
+
+    // ---------- Configuración ----------
+    match /config/setup {
+      // Público: solo indica si ya se creó el administrador inicial
+      allow get: if true;
+      allow create: if signedIn()
+        && !setupDone()
+        && getAfter(profilePath(request.auth.uid)).data.role == 'admin'
+        && request.resource.data.keys().hasOnly(['initializedAt']);
+    }
+
+    match /config/store {
+      allow read: if isActive();
+      allow write: if isAdmin();
+    }
+
+    // ---------- Operación ----------
+    match /orders/{orderId} {
+      allow read: if isActive();
+      allow create, delete: if isStaff();
+      // Cocina solo marca productos como listos
+      allow update: if isStaff() || (hasRole(['kitchen']) && changedOnly(['items']));
+    }
+
+    match /paidOrders/{orderId} {
+      allow read: if isActive();
+      allow create: if isStaff();
+      allow update, delete: if isAdmin();
+    }
+
+    match /alerts/{alertId} {
+      allow read, create: if isActive();
+      allow update: if isActive() && changedOnly(['read']);
+      allow delete: if isAdmin();
+    }
+
+    match /inventory/{productId} {
+      allow read: if isActive();
+      allow write: if isAdmin();
+      // Meseros: solo descontar existencias (al enviar a cocina o al cobrar)
+      allow update: if isStaff()
+        && changedOnly(['stock', 'updatedAt'])
+        && request.resource.data.stock < resource.data.stock;
+    }
+
+    // Todo lo demás queda cerrado
+  }
+}

@@ -7,7 +7,14 @@
     "dev": "vite --host",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:rules": "firebase emulators:exec --only firestore --project demo-soma \"node --test tests/firestore.rules.test.mjs\"",
+    "emulators": "firebase emulators:start --only auth,firestore --project demo-soma",
+    "dev:emulators": "VITE_USE_EMULATORS=true vite --host",
+    "deploy:rules": "firebase deploy --only firestore:rules --project pruebas",
+    "deploy:functions": "firebase deploy --only functions --project pruebas",
+    "deploy:rules:prod": "firebase deploy --only firestore:rules --project produccion",
+    "deploy:functions:prod": "firebase deploy --only functions --project produccion"
   },
   "dependencies": {
     "firebase": "^12.19.0",
@@ -18,11 +25,13 @@
     "zustand": "^5.0.15"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
     "@vitejs/plugin-react": "^6.1.1",
     "autoprefixer": "^10.6.1",
+    "firebase-tools": "^15.32.1",
     "oxlint": "^1.81.0",
     "postcss": "^8.5.28",
     "tailwindcss": "^3.4.19",
