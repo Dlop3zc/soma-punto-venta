@@ -1,5 +1,16 @@
-export const categories = [
-  'Todo',
+// Carta con la que arranca un sistema nuevo. Después se edita desde la pantalla "Carta"
+// y vive en Firestore (`products` y `config/menu`); este archivo ya no se modifica.
+
+// Lo que se guarda en cada producto vendido (copia en la cuenta: si después cambia
+// el precio en la carta, las cuentas ya abiertas conservan el precio con que se pidió)
+export interface Product {
+  id: string;
+  name: string;
+  price: number;
+  category: string;
+}
+
+export const defaultCategories = [
   'Caguama',
   'Michelada',
   'Bebida Sin Alcohol',
@@ -10,19 +21,10 @@ export const categories = [
   'Tequila',
   'Mezcal',
   'Whisky',
-  'Ron'
-] as const;
+  'Ron',
+];
 
-export type Category = typeof categories[number];
-
-export interface Product {
-  id: string;
-  name: string;
-  price: number;
-  category: Category;
-}
-
-export const mockProducts: Product[] = [
+export const defaultProducts: Product[] = [
   // CAGUAMA
   { id: 'cag-1', name: 'Corona 1.2 LT', price: 85, category: 'Caguama' },
   { id: 'cag-2', name: 'Victoria 1.2 LT', price: 85, category: 'Caguama' },

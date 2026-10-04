@@ -4,7 +4,7 @@ import {
 } from 'recharts';
 import { useCartStore } from '../store/useCartStore';
 import { useInventoryStore } from '../store/useInventoryStore';
-import { mockProducts } from '../data/mockProducts';
+import { useMenuStore } from '../store/useMenuStore';
 import {
   rangeForPreset, previousRange, inRange, computeKpis, delta, salesTimeline, salesHeatmap, productStats,
   categoryStats, topPairs, waiterStats, paymentSplit, kitchenStats, stockCoverage, WEEKDAYS, LATE_MS,
@@ -50,6 +50,7 @@ const compactMoney = (n: number) =>
 export default function AnalyticsView() {
   const paidOrders = useCartStore(s => s.paidOrders);
   const inventory = useInventoryStore(s => s.inventory);
+  const products = useMenuStore(s => s.products);
   const [preset, setPreset] = useState<PeriodPreset>('7d');
   const [custom, setCustom] = useState({ from: '', to: '' });
   const isNarrow = typeof window !== 'undefined' && window.innerWidth < 640;
@@ -72,9 +73,9 @@ export default function AnalyticsView() {
       waiters: waiterStats(current),
       payments: paymentSplit(current),
       kitchen: kitchenStats(current),
-      coverage: stockCoverage(current, range, mockProducts, inventory),
+      coverage: stockCoverage(current, range, products, inventory),
     };
-  }, [paidOrders, inventory, range, prev]);
+  }, [paidOrders, inventory, products, range, prev]);
 
   const fmtDate = (ts: number) => new Date(ts).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' });
   const rangeLabel = range.end - range.start <= 86_400_000

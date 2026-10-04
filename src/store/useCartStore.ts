@@ -4,7 +4,8 @@ import {
   collection, doc, setDoc, updateDoc, onSnapshot, writeBatch,
   runTransaction, increment, type Transaction,
 } from 'firebase/firestore';
-import type { Product } from '../data/mockProducts';
+import type { Product } from '../data/defaultMenu';
+import { toOrderProduct } from './useMenuStore';
 import { useAuthStore } from './useAuthStore';
 import { useInventoryStore } from './useInventoryStore';
 import { getAvailability, reservedQuantity } from '../utils/stock';
@@ -244,7 +245,7 @@ export const useCartStore = create<CartState>((set, get) => ({
         existing.quantity += 1;
       } else {
         order.items.push({
-          ...product,
+          ...toOrderProduct(product),
           cartItemId: generateOrderId(),
           quantity: 1,
           status: 'nuevo',

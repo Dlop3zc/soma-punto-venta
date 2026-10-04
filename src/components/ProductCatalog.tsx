@@ -1,16 +1,24 @@
 import { useState, useEffect } from 'react';
-import { mockProducts, categories, type Category, type Product } from '../data/mockProducts';
+import type { Product } from '../data/defaultMenu';
+import { useMenuStore } from '../store/useMenuStore';
 import { useCartStore } from '../store/useCartStore';
 import { useInventoryStore, DEFAULT_INVENTORY } from '../store/useInventoryStore';
 import { getAvailability, reservedQuantity } from '../utils/stock';
 import OrderNameModal from './OrderNameModal';
 
+const ALL = 'Todo';
+
 export default function ProductCatalog() {
-  const [activeCategory, setActiveCategory] = useState<Category>('Todo');
+  const [activeCategory, setActiveCategory] = useState<string>(ALL);
   const [pendingProduct, setPendingProduct] = useState<Product | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const { orders, addToCart, createOrder } = useCartStore();
   const inventory = useInventoryStore(s => s.inventory);
+  const { products, categories: allCategories, loaded } = useMenuStore();
+
+  const visibleProducts = products.filter(p => p.visible);
+  // Solo categorías con algo que vender
+  const categories = [ALL, ...allCategories.filter(c => visibleProducts.some(p => p.category === c))];
 
   useEffect(() => {
     if (!message) return;
@@ -18,9 +26,10 @@ export default function ProductCatalog() {
     return () => clearTimeout(t);
   }, [message]);
 
-  const filteredProducts = mockProducts.filter(
-    (product) => activeCategory === 'Todo' || product.category === activeCategory
+  const filteredProducts = visibleProducts.filter(
+    (product) => activeCategory === ALL || !categories.includes(activeCategory) || product.category === activeCategory
   );
+  const selectedCategory = categories.includes(activeCategory) ? activeCategory : ALL;
 
   const handleAdd = async (product: Product) => {
     try {
@@ -41,7 +50,7 @@ export default function ProductCatalog() {
             key={category}
             onClick={() => setActiveCategory(category)}
             className={`shrink-0 px-4 py-2 md:px-6 md:py-3 rounded-full text-base md:text-lg font-bold transition-colors whitespace-nowrap ${
-              activeCategory === category
+              selectedCategory === category
                 ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
                 : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
             }`}
@@ -53,6 +62,11 @@ export default function ProductCatalog() {
 
       {/* Product Grid */}
       <div className="flex-1 overflow-y-auto -mr-1 pr-1 pb-24 md:pb-2">
+        {filteredProducts.length === 0 && (
+          <div className="h-full flex items-center justify-center text-center text-zinc-500 text-xl px-4">
+            {loaded ? 'No hay productos en la carta. El administrador puede agregarlos en "Carta".' : 'Cargando carta…'}
+          </div>
+        )}
         <div className="grid gap-2.5 md:gap-4 grid-cols-[repeat(auto-fill,minmax(140px,1fr))] md:grid-cols-[repeat(auto-fill,minmax(165px,1fr))] xl:grid-cols-[repeat(auto-fill,minmax(190px,1fr))]">
           {filteredProducts.map((product) => {
             const record = inventory[product.id] ?? DEFAULT_INVENTORY;

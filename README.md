@@ -128,3 +128,15 @@ En iPad/iPhone no se puede usar una impresora USB.
   - Cada cancelación queda en `cancellations` con quién la hizo y por qué, y aparece en el corte.
   - Si el producto se estaba preparando, cocina ve un aviso en "Por Cocinar".
 - Después de actualizar, despliega las reglas: `npm run deploy:rules`.
+
+## Carta (productos y precios)
+
+- **Dónde vive la carta:** en Firestore. Los productos están en `products` y el orden de las categorías en `config/menu`. El admin la edita desde la pantalla **Carta**:
+  - Agregar, editar o borrar productos.
+  - Ocultarlos sin borrarlos.
+  - Ordenarlos.
+  - Administrar las categorías.
+- **Primera vez:** la primera vez que un admin entra, se importa sola la carta original (`src/data/defaultMenu.ts`). Ese archivo ya no se usa después.
+- **Cambios de precio:** solo aplican a lo que se pida después. Las cuentas abiertas y las ventas pasadas conservan el precio con que se pidió.
+- **Borrar un producto** también borra su registro de inventario. Las ventas anteriores no se pierden.
+- **Después de actualizar,** despliega las reglas *antes* de entrar como admin: `npm run deploy:rules`. Sin ellas, la importación inicial falla.
