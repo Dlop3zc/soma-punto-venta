@@ -1,6 +1,7 @@
 import { EscPosBuilder, type TicketWriter } from './escpos';
 import { HtmlTicketWriter } from './htmlTicket';
 import type { Order, PaidOrder, CartItem } from '../store/useCartStore';
+import type { CashCut } from '../utils/cashCut';
 
 export interface TicketSettings {
   paperWidth: 58 | 80;
@@ -133,6 +134,58 @@ function writePreBill(b: TicketWriter, order: Order, s: TicketSettings, tipSugge
   }
   b.feed(1).align('center').wrapped('Este documento no es un comprobante de pago').align('left');
   footer(b, s);
+}
+
+// Corte de caja (cierre de turno)
+export const buildCashCut = (cut: CashCut, s: TicketSettings) => toEscPos(s, b => writeCashCut(b, cut, s));
+export const buildCashCutHtml = (cut: CashCut, s: TicketSettings) => toHtml(s, b => writeCashCut(b, cut, s));
+
+function writeCashCut(b: TicketWriter, cut: CashCut, s: TicketSettings) {
+  header(b, s);
+  b.align('center').bold(true).line('CORTE DE CAJA').bold(false).align('left');
+  b.line(`Desde: ${cut.from ? formatDate(cut.from) : 'inicio'}`);
+  b.line(`Hasta: ${formatDate(cut.to)}`);
+  b.line(`Hizo el corte: ${cut.madeBy}`);
+  b.separator();
+
+  b.pair('Cuentas cobradas', String(cut.orderCount));
+  b.pair('Ventas en efectivo', money(cut.cashSales));
+  b.pair('Ventas con tarjeta', money(cut.cardSales));
+  if (cut.discounts) b.pair('Descuentos', `-${money(cut.discounts)}`);
+  b.bold(true).size(1, 2).pair('VENTAS', money(cut.sales)).size(1, 1).bold(false);
+  b.separator();
+
+  b.pair('Propinas efectivo', money(cut.cashTips));
+  b.pair('Propinas tarjeta', money(cut.cardTips));
+  b.bold(true).pair('PROPINAS', money(cut.tips)).bold(false);
+  b.separator();
+
+  b.pair('Fondo de caja', money(cut.openingFloat));
+  b.bold(true).pair('Efectivo esperado', money(cut.expectedCash)).bold(false);
+  if (cut.countedCash !== null && cut.difference !== null) {
+    b.pair('Efectivo contado', money(cut.countedCash));
+    const label = cut.difference === 0 ? 'Cuadra' : cut.difference > 0 ? 'Sobrante' : 'Faltante';
+    b.bold(true).pair(label, money(Math.abs(cut.difference))).bold(false);
+  }
+  b.separator();
+
+  if (cut.byWaiter.length) {
+    b.bold(true).line('Por mesero').bold(false);
+    cut.byWaiter.forEach(w => {
+      b.pair(`${w.waiter} (${w.orders})`, money(w.sales));
+      if (w.tips) b.pair('   Propinas', money(w.tips));
+    });
+    b.separator();
+  }
+
+  if (cut.cancelledItems) {
+    b.pair(`Cancelados (${cut.cancelledItems} pzs)`, money(cut.cancelledAmount));
+  }
+  if (cut.openOrders) b.pair('Cuentas abiertas', String(cut.openOrders));
+  if (cut.notes) b.wrapped(`Notas: ${cut.notes}`);
+
+  b.feed(2).line('Firma: _______________________');
+  b.feed(3).cut();
 }
 
 export const buildTestPage = (s: TicketSettings, label: string) => toEscPos(s, b => writeTestPage(b, s, label));

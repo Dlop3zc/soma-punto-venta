@@ -126,10 +126,43 @@ service cloud.firestore {
     match /inventory/{productId} {
       allow read: if isActive();
       allow write: if isAdmin();
-      // Meseros: solo descontar existencias (al enviar a cocina o al cobrar)
-      allow update: if isStaff()
-        && changedOnly(['stock', 'updatedAt'])
-        && request.resource.data.stock < resource.data.stock;
+      allow update: if isStaff() && (
+        // Meseros: descontar existencias (al enviar a cocina o al cobrar)
+        (changedOnly(['stock', 'updatedAt']) && request.resource.data.stock < resource.data.stock)
+        // ...o regresar las piezas de una cancelación registrada en este mismo lote
+        || restockFromCancellation(productId)
+      );
+    }
+
+    function cancellationPath(id) {
+      return /databases/$(database)/documents/cancellations/$(id);
+    }
+
+    function restockFromCancellation(productId) {
+      let id = request.resource.data.lastCancellationId;
+      return changedOnly(['stock', 'updatedAt', 'lastCancellationId'])
+        && id is string
+        && !exists(cancellationPath(id))
+        && existsAfter(cancellationPath(id))
+        && getAfter(cancellationPath(id)).data.productId == productId
+        && getAfter(cancellationPath(id)).data.restocked == true
+        && request.resource.data.stock == resource.data.stock + getAfter(cancellationPath(id)).data.quantity;
+    }
+
+    // Productos quitados de una cuenta después de enviarse a cocina (para el corte)
+    match /cancellations/{id} {
+      allow read: if isActive();
+      allow create: if isStaff()
+        && request.resource.data.id == id
+        && request.resource.data.quantity is int && request.resource.data.quantity > 0
+        && request.resource.data.restocked is bool
+        && request.resource.data.productId is string
+        && request.resource.data.cancelledBy == profile().name;
+    }
+
+    // Cortes de caja: solo el admin; un corte cerrado no se modifica
+    match /cashCuts/{id} {
+      allow read, create: if isAdmin();
     }
 
     // Todo lo demás queda cerrado

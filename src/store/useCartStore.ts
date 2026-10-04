@@ -1,13 +1,14 @@
 import { create } from 'zustand';
 import { db } from '../firebase';
 import {
-  collection, doc, setDoc, updateDoc, onSnapshot, writeBatch, getDocs,
+  collection, doc, setDoc, updateDoc, onSnapshot, writeBatch,
   runTransaction, increment, type Transaction,
 } from 'firebase/firestore';
 import type { Product } from '../data/mockProducts';
 import { useAuthStore } from './useAuthStore';
 import { useInventoryStore } from './useInventoryStore';
 import { getAvailability, reservedQuantity } from '../utils/stock';
+import type { Cancellation } from '../utils/cashCut';
 
 export interface CartItem extends Product {
   cartItemId: string;
@@ -59,6 +60,12 @@ export interface Alert {
   createdAt: number;
 }
 
+export interface CancelItemInput {
+  quantity: number;
+  reason: string;
+  restock: boolean; // regresar las piezas al inventario (no se llegaron a preparar)
+}
+
 export type AddToCartResult = 'ok' | 'no-order' | 'out-of-stock';
 
 interface CartState {
@@ -76,13 +83,12 @@ interface CartState {
   addToCart: (product: Product) => Promise<AddToCartResult>;
   updateQuantity: (cartItemId: string, delta: number) => Promise<AddToCartResult>;
   setItemNote: (cartItemId: string, note: string) => Promise<void>;
-  removeSentItem: (orderId: string, cartItemId: string, quantity: number, restock: boolean) => Promise<void>;
+  cancelSentItem: (orderId: string, cartItemId: string, input: CancelItemInput) => Promise<void>;
   payOrder: (orderId: string, payment: PaymentInput) => Promise<PaidOrder | null>;
   splitOrder: (originalOrderId: string, itemsToMove: { id: string, quantity: number }[]) => Promise<void>;
   sendToKitchen: (orderId: string) => Promise<void>;
   markAsReady: (orderId: string) => Promise<void>;
   dismissAlert: (alertId: string) => Promise<void>;
-  clearData: () => Promise<void>;
 }
 
 const generateOrderId = () => Math.random().toString(36).substr(2, 9);
@@ -276,17 +282,41 @@ export const useCartStore = create<CartState>((set, get) => ({
     });
   },
 
-  // Quita piezas que ya se enviaron a cocina (solo admin). Opcionalmente las regresa al inventario.
-  removeSentItem: async (orderId, cartItemId, quantity, restock) => {
+  // Quita piezas que ya se enviaron a cocina (p. ej. el cliente ya no las quiere).
+  // Queda un registro en `cancellations` para el corte de caja.
+  cancelSentItem: async (orderId, cartItemId, { quantity, reason, restock }) => {
+    const cancelRef = doc(collection(db, 'cancellations'));
     await mutateOrder(orderId, (order, tx) => {
       const item = order.items.find(i => i.cartItemId === cartItemId);
-      if (!item || item.status === 'nuevo') return;
-      const qty = Math.min(quantity, item.quantity);
+      if (!item || item.status === 'nuevo') throw new Error('El producto ya no está en la cuenta.');
+      const qty = Math.min(Math.max(1, Math.floor(quantity)), item.quantity);
+      const tracked = useInventoryStore.getState().getRecord(item.id).tracked;
+
+      const cancellation: Cancellation = {
+        id: cancelRef.id,
+        orderId: order.id,
+        orderName: order.name,
+        waiter: order.waiter,
+        cancelledBy: currentUserName(),
+        productId: item.id,
+        productName: item.name,
+        quantity: qty,
+        unitPrice: item.price,
+        status: item.status,
+        reason: reason.trim() || 'Sin motivo',
+        restocked: restock && tracked,
+        createdAt: Date.now(),
+      };
+      tx.set(cancelRef, cancellation);
+
       item.quantity -= qty;
       order.items = order.items.filter(i => i.quantity > 0);
 
-      if (restock && useInventoryStore.getState().getRecord(item.id).tracked) {
-        tx.set(doc(db, 'inventory', item.id), { stock: increment(qty), updatedAt: Date.now() }, { merge: true });
+      if (cancellation.restocked) {
+        // `lastCancellationId` permite a las reglas validar que la devolución corresponde a esta cancelación
+        tx.set(doc(db, 'inventory', item.id), {
+          stock: increment(qty), updatedAt: Date.now(), lastCancellationId: cancelRef.id,
+        }, { merge: true });
       }
     });
   },
@@ -370,20 +400,6 @@ export const useCartStore = create<CartState>((set, get) => ({
     });
 
     set({ activeOrderId: newOrderId }); // Switch to the new order to pay it immediately
-  },
-
-  clearData: async () => {
-    const batch = writeBatch(db);
-    const ordersSnapshot = await getDocs(collection(db, 'orders'));
-    ordersSnapshot.forEach(d => batch.delete(d.ref));
-
-    const alertsSnapshot = await getDocs(collection(db, 'alerts'));
-    alertsSnapshot.forEach(d => batch.delete(d.ref));
-
-    // Guardar el tiempo del último corte
-    batch.set(doc(db, 'config', 'store'), { lastCutTime: Date.now() }, { merge: true });
-
-    await batch.commit();
   },
 
   sendToKitchen: async (orderId) => {

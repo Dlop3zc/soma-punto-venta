@@ -1,23 +1,21 @@
 import { useState, useEffect } from 'react';
 import { useCartStore, type CartItem } from '../store/useCartStore';
-import { useAuthStore } from '../store/useAuthStore';
-import { useInventoryStore } from '../store/useInventoryStore';
 import { Minus, Plus, Trash2, Pencil, StickyNote } from 'lucide-react';
 import OrderTabs from './OrderTabs';
 import OrderNameModal from './OrderNameModal';
+import CancelItemModal from './CancelItemModal';
 
 export default function Cart() {
   const {
     orders, activeOrderId, updateQuantity, sendToKitchen, renameOrder,
-    deleteEmptyOrder, setItemNote, removeSentItem,
+    deleteEmptyOrder, setItemNote,
   } = useCartStore();
-  const isAdmin = useAuthStore(s => s.activeUser?.role === 'admin');
-  const getRecord = useInventoryStore(s => s.getRecord);
 
   const [isRenaming, setIsRenaming] = useState(false);
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [noteDraft, setNoteDraft] = useState('');
   const [message, setMessage] = useState<string | null>(null);
+  const [cancellingItem, setCancellingItem] = useState<CartItem | null>(null);
 
   const activeOrder = orders.find(o => o.id === activeOrderId);
   const cartItems = activeOrder?.items || [];
@@ -43,16 +41,6 @@ export default function Cart() {
     const result = await updateQuantity(item.cartItemId, 1);
     if (result === 'out-of-stock') setMessage(`${item.name}: sin existencias`);
   });
-
-  // Productos ya enviados a cocina: solo el admin puede quitarlos
-  const handleRemoveSent = (item: CartItem) => {
-    if (!activeOrder) return;
-    const label = item.status === 'listo' ? 'ya fue entregado' : 'ya está en cocina';
-    if (!window.confirm(`"${item.name}" ${label}.\n\n¿Quitar 1 de la cuenta ${activeOrder.name}?`)) return;
-    const restock = getRecord(item.id).tracked
-      && window.confirm('¿Regresar esa pieza al inventario?\n\nAceptar = sí (no se usó)\nCancelar = no (se desperdició)');
-    run(() => removeSentItem(activeOrder.id, item.cartItemId, 1, restock));
-  };
 
   const handleDeleteOrder = () => {
     if (!activeOrder) return;
@@ -122,7 +110,6 @@ export default function Cart() {
         ) : (
           cartItems.map((item) => {
             const isNew = item.status === 'nuevo';
-            const canDecrease = isNew || isAdmin;
 
             return (
               <div key={item.cartItemId} className="bg-zinc-900 p-3 md:p-4 rounded-xl border border-zinc-800">
@@ -145,16 +132,11 @@ export default function Cart() {
                   </div>
                   <div className="flex items-center gap-2 md:gap-3 shrink-0">
                     <button
-                      onClick={() => isNew ? run(() => updateQuantity(item.cartItemId, -1)) : handleRemoveSent(item)}
-                      disabled={!canDecrease}
-                      title={isNew ? undefined : 'Quitar producto enviado (admin)'}
-                      className={`w-11 h-11 md:w-12 md:h-12 rounded-full flex items-center justify-center transition-colors ${
-                        !canDecrease
-                          ? 'bg-zinc-800 text-zinc-700 cursor-not-allowed'
-                          : 'bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-600 text-zinc-300'
-                      }`}
+                      onClick={() => isNew ? run(() => updateQuantity(item.cartItemId, -1)) : setCancellingItem(item)}
+                      title={isNew ? undefined : 'Quitar producto ya enviado'}
+                      className="w-11 h-11 md:w-12 md:h-12 rounded-full flex items-center justify-center transition-colors bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-600 text-zinc-300"
                     >
-                      {item.quantity === 1 ? <Trash2 className={canDecrease ? "text-red-400" : ""} size={24} /> : <Minus size={24} />}
+                      {isNew && item.quantity > 1 ? <Minus size={24} /> : <Trash2 className="text-red-400" size={24} />}
                     </button>
                     <span className="text-xl md:text-2xl font-bold w-7 text-center">{item.quantity}</span>
                     <button
@@ -234,6 +216,14 @@ export default function Cart() {
         <div className="absolute bottom-32 left-1/2 -translate-x-1/2 z-30 bg-red-600 text-white font-bold px-6 py-3 rounded-xl shadow-2xl whitespace-nowrap">
           {message}
         </div>
+      )}
+
+      {cancellingItem && activeOrder && (
+        <CancelItemModal
+          order={activeOrder}
+          item={cancellingItem}
+          onClose={() => setCancellingItem(null)}
+        />
       )}
 
       {isRenaming && activeOrder && (
