@@ -112,3 +112,19 @@ en ambos:
   del sistema ya tiene tomada la impresora.
 
 En iPad/iPhone no se puede usar una impresora USB.
+
+## Corte de caja y cancelaciones
+
+- **Corte (admin):** muestra solo el turno actual, es decir, lo cobrado desde el último corte. Incluye:
+  - Ventas en efectivo y con tarjeta.
+  - Propinas y descuentos.
+  - Ventas por mesero.
+  - Productos cancelados.
+- **Al cerrar el turno** se captura el fondo de caja y, opcionalmente, el efectivo contado. La app calcula el efectivo esperado (fondo + ventas en efectivo + propinas en efectivo) y muestra si sobra o falta.
+- **Cada corte se guarda en `cashCuts`.** En "Cortes anteriores" se puede consultar, imprimir o exportar a CSV. Un corte guardado no se puede modificar.
+- **Las cuentas abiertas no se borran** con el corte: pasan al siguiente turno.
+- **Cancelaciones:** cualquier mesero puede quitar productos que ya se enviaron a cocina.
+  - Indica la cantidad y el motivo, y si las piezas regresan al inventario.
+  - Cada cancelación queda en `cancellations` con quién la hizo y por qué, y aparece en el corte.
+  - Si el producto se estaba preparando, cocina ve un aviso en "Por Cocinar".
+- Después de actualizar, despliega las reglas: `npm run deploy:rules`.

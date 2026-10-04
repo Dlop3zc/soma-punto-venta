@@ -164,6 +164,52 @@ describe('operación del bar', () => {
     await assertFails(setDoc(doc(db, 'inventory/nuevo'), { tracked: true, stock: 99, available: true }));
   });
 
+  test('el mesero cancela productos enviados y deja registro', async () => {
+    const db = as('mesero1');
+    const cancel = (id, extra = {}) => ({
+      id, orderId: 'o1', productId: 'cag-1', quantity: 2, restocked: true,
+      cancelledBy: 'Nombre mesero1', reason: 'Cliente ya no lo quiso', createdAt: 1, ...extra,
+    });
+
+    // Cancelación con devolución al inventario, en el mismo lote
+    const ok = writeBatch(db);
+    ok.set(doc(db, 'cancellations/c1'), cancel('c1'));
+    ok.set(doc(db, 'inventory/cag-1'), { stock: increment(2), updatedAt: 1, lastCancellationId: 'c1' }, { merge: true });
+    await assertSucceeds(ok.commit());
+    await assertSucceeds(getDoc(doc(as('cocina1'), 'cancellations/c1')));
+
+    // No puede devolver más piezas de las canceladas
+    const more = writeBatch(db);
+    more.set(doc(db, 'cancellations/c2'), cancel('c2'));
+    more.set(doc(db, 'inventory/cag-1'), { stock: increment(5), updatedAt: 1, lastCancellationId: 'c2' }, { merge: true });
+    await assertFails(more.commit());
+
+    // Ni reutilizar una cancelación ya registrada
+    await assertFails(setDoc(doc(db, 'inventory/cag-1'), { stock: increment(2), updatedAt: 2, lastCancellationId: 'c1' }, { merge: true }));
+
+    // Ni devolver si la cancelación dice que no se regresó
+    const notRestocked = writeBatch(db);
+    notRestocked.set(doc(db, 'cancellations/c3'), cancel('c3', { restocked: false }));
+    notRestocked.set(doc(db, 'inventory/cag-1'), { stock: increment(2), updatedAt: 1, lastCancellationId: 'c3' }, { merge: true });
+    await assertFails(notRestocked.commit());
+
+    // Ni firmar a nombre de otro, ni borrar o editar el registro
+    await assertFails(setDoc(doc(db, 'cancellations/c4'), cancel('c4', { cancelledBy: 'Otro' })));
+    await assertFails(updateDoc(doc(db, 'cancellations/c1'), { quantity: 1 }));
+    await assertFails(deleteDoc(doc(db, 'cancellations/c1')));
+    await assertFails(setDoc(doc(as('cocina1'), 'cancellations/c5'), cancel('c5', { cancelledBy: 'Nombre cocina1' })));
+  });
+
+  test('solo el admin hace y ve cortes de caja, y no se pueden modificar', async () => {
+    await assertFails(setDoc(doc(as('mesero1'), 'cashCuts/k1'), { id: 'k1', sales: 1 }));
+    await assertFails(getDocs(collection(as('mesero1'), 'cashCuts')));
+    const db = as('admin1');
+    await assertSucceeds(setDoc(doc(db, 'cashCuts/k1'), { id: 'k1', sales: 100 }));
+    await assertSucceeds(getDocs(collection(db, 'cashCuts')));
+    await assertFails(updateDoc(doc(db, 'cashCuts/k1'), { sales: 1 }));
+    await assertFails(deleteDoc(doc(db, 'cashCuts/k1')));
+  });
+
   test('cocina marca listo y avisa, pero no edita otra cosa', async () => {
     const db = as('cocina1');
     await assertSucceeds(getDoc(doc(db, 'orders/o1')));

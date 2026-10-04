@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import ProductCatalog from './components/ProductCatalog';
 import Cart from './components/Cart';
-import PaidOrdersHistory from './components/PaidOrdersHistory';
+import CashCutModal from './components/CashCutModal';
+import { useShiftStore } from './store/useShiftStore';
 import KitchenView from './components/KitchenView';
 import CheckoutView from './components/CheckoutView';
 import AnalyticsView from './components/AnalyticsView';
@@ -64,20 +65,28 @@ function App() {
     if (!sessionUid) return;
     const unsubCart = initListeners();
     const unsubInventory = initInventoryListener();
+    const unsubCancellations = useShiftStore.getState().initCancellationsListener();
     // Reconectar sola la impresora autorizada previamente en este navegador
     if (usePrinterStore.getState().settings.mode === 'direct') usePrinterStore.getState().reconnect();
     return () => {
       unsubCart();
       unsubInventory();
+      unsubCancellations();
       // No dejar datos del turno en memoria después de cerrar sesión
       useCartStore.setState({ orders: [], paidOrders: [], alerts: [], activeOrderId: null });
       useInventoryStore.setState({ inventory: {} });
+      useShiftStore.setState({ cancellations: [], cashCuts: [] });
     };
   }, [sessionUid, initListeners, initInventoryListener]);
 
   useEffect(() => {
     if (!sessionUid || sessionRole !== 'admin') return;
-    return initUsersListener();
+    const unsubUsers = initUsersListener();
+    const unsubCuts = useShiftStore.getState().initCashCutsListener();
+    return () => {
+      unsubUsers();
+      unsubCuts();
+    };
   }, [sessionUid, sessionRole, initUsersListener]);
 
   // Enforce role access on view change
@@ -321,7 +330,7 @@ function App() {
       {isPasswordOpen && <ChangePasswordModal onClose={() => setIsPasswordOpen(false)} />}
 
       {activeUser.role === 'admin' && (
-        <PaidOrdersHistory
+        <CashCutModal
           isOpen={isHistoryOpen}
           onClose={() => setIsHistoryOpen(false)}
         />

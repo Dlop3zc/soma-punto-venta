@@ -1,12 +1,34 @@
 import { useCartStore, type Order, type PaidOrder } from '../store/useCartStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { useState } from 'react';
+import { useShiftStore } from '../store/useShiftStore';
 import KitchenTimer from './KitchenTimer';
+
+const CANCEL_NOTICE_MS = 30 * 60 * 1000;
+const SEEN_KEY = 'soma-kitchen-seen-cancellations';
+
+function loadSeen(): string[] {
+  try { return JSON.parse(localStorage.getItem(SEEN_KEY) || '[]'); } catch { return []; }
+}
 
 export default function KitchenView() {
   const { orders, paidOrders, lastCutTime, markAsReady } = useCartStore();
   const { activeUser } = useAuthStore();
   const [activeTab, setActiveTab] = useState<'pendientes' | 'historial'>('pendientes');
+  const cancellations = useShiftStore(s => s.cancellations);
+  const [seen, setSeen] = useState<string[]>(loadSeen);
+  const [now] = useState(() => Date.now());
+
+  // Productos que cocina estaba preparando y el mesero quitó de la cuenta
+  const cancelNotices = cancellations.filter(c =>
+    c.status === 'preparando' && c.createdAt > now - CANCEL_NOTICE_MS && !seen.includes(c.id)
+  );
+
+  const dismissNotice = (id: string) => {
+    const next = [...seen, id].slice(-100);
+    setSeen(next);
+    try { localStorage.setItem(SEEN_KEY, JSON.stringify(next)); } catch { /* sin almacenamiento */ }
+  };
 
   // Pendientes: ordenes que tienen al menos un item 'preparando'
   const kitchenOrders = orders.filter(o => 
@@ -77,6 +99,29 @@ export default function KitchenView() {
       <div className="flex-1 overflow-y-auto p-3 md:p-6">
         {activeTab === 'pendientes' && (
           <>
+            {cancelNotices.length > 0 && (
+              <div className="mb-4 md:mb-6 space-y-2">
+                {cancelNotices.map(c => (
+                  <div key={c.id} className="flex items-center gap-3 bg-red-950/60 border border-red-500/40 rounded-2xl p-4">
+                    <span className="text-3xl">🚫</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-red-200 font-bold text-lg">
+                        Cancelado: {c.quantity}x {c.productName}
+                      </p>
+                      <p className="text-red-300/80 text-sm">
+                        {c.orderName} · {c.cancelledBy} · {c.reason} · {new Date(c.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => dismissNotice(c.id)}
+                      className="px-4 py-3 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold shrink-0"
+                    >
+                      Entendido
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
             {kitchenOrders.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-zinc-500 gap-4">
                 <span className="text-6xl">🍽️</span>

@@ -3,8 +3,10 @@ import {
   requestPrinter, reconnectPrinter, type ConnectionType, type PrinterTransport,
 } from '../printer/transport';
 import {
-  buildReceipt, buildPreBill, buildTestPage, buildReceiptHtml, buildPreBillHtml, buildTestPageHtml, type TicketSettings,
+  buildReceipt, buildPreBill, buildTestPage, buildReceiptHtml, buildPreBillHtml, buildTestPageHtml,
+  buildCashCut, buildCashCutHtml, type TicketSettings,
 } from '../printer/tickets';
+import type { CashCut } from '../utils/cashCut';
 import { printHtml } from '../printer/browserPrint';
 import type { Order, PaidOrder } from './useCartStore';
 
@@ -92,6 +94,7 @@ interface PrinterState {
   printReceipt: (order: PaidOrder, reprint?: boolean) => Promise<boolean>;
   printPreBill: (order: Order) => Promise<boolean>;
   printTest: () => Promise<boolean>;
+  printCashCut: (cut: CashCut) => Promise<boolean>;
   openDrawer: () => Promise<boolean>;
 }
 
@@ -193,6 +196,13 @@ export const usePrinterStore = create<PrinterState>((set, get) => {
       return settings.mode === 'system'
         ? viaSystem(buildTestPageHtml(settings, 'Impresora del sistema'))
         : send(buildTestPage(settings, deviceLabel || 'desconocida'));
+    },
+
+    printCashCut: (cut) => {
+      const { settings } = get();
+      return settings.mode === 'system'
+        ? viaSystem(buildCashCutHtml(cut, settings))
+        : send(buildCashCut(cut, settings));
     },
 
     openDrawer: () => send(new Uint8Array([0x1b, 0x70, 0x00, 0x19, 0xfa])),
