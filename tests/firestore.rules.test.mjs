@@ -6,7 +6,7 @@ import {
   initializeTestEnvironment, assertSucceeds, assertFails,
 } from '@firebase/rules-unit-testing';
 import {
-  doc, getDoc, setDoc, updateDoc, deleteDoc, getDocs, collection, writeBatch, increment,
+  doc, getDoc, setDoc, updateDoc, deleteDoc, getDocs, collection, writeBatch, increment, query, where,
 } from 'firebase/firestore';
 
 let env;
@@ -42,6 +42,9 @@ beforeEach(async () => {
     await setDoc(doc(db, 'orders/o1'), { id: 'o1', name: 'Mesa 1', waiter: 'Nombre mesero1', items: [], total: 0, createdAt: 1 });
     await setDoc(doc(db, 'paidOrders/p1'), { id: 'p1', total: 100 });
     await setDoc(doc(db, 'inventory/cag-1'), { tracked: true, stock: 10, available: true });
+    await setDoc(doc(db, 'products/cag-1'), { id: 'cag-1', name: 'Corona', price: 85, category: 'Caguama', visible: true, position: 0 });
+    await setDoc(doc(db, 'products/oculto'), { id: 'oculto', name: 'Oculto', price: 1, category: 'Caguama', visible: false, position: 1 });
+    await setDoc(doc(db, 'config/menu'), { categories: ['Caguama'] });
     await setDoc(doc(db, 'alerts/a1'), { id: 'a1', read: false, message: 'lista' });
   });
 });
@@ -53,7 +56,30 @@ describe('sin sesión', () => {
     await assertFails(getDocs(collection(db, 'paidOrders')));
     await assertFails(getDocs(collection(db, 'users')));
     await assertFails(getDoc(doc(db, 'users/legacy123')));
-    await assertFails(getDoc(doc(db, 'inventory/cag-1')));
+    await assertFails(getDocs(collection(db, 'cancellations')));
+    await assertFails(getDocs(collection(db, 'cashCuts')));
+    await assertFails(getDoc(doc(db, 'config/store')));
+  });
+
+  test('puede leer el menú digital: productos visibles, categorías e inventario', async () => {
+    const db = anon();
+    await assertSucceeds(getDocs(query(collection(db, 'products'), where('visible', '==', true))));
+    await assertSucceeds(getDoc(doc(db, 'products/cag-1')));
+    await assertSucceeds(getDoc(doc(db, 'config/menu')));
+    await assertSucceeds(getDocs(collection(db, 'inventory')));
+  });
+
+  test('no ve productos ocultos de la carta', async () => {
+    const db = anon();
+    await assertFails(getDoc(doc(db, 'products/oculto')));
+    await assertFails(getDocs(collection(db, 'products')));
+  });
+
+  test('no puede modificar la carta ni el inventario', async () => {
+    const db = anon();
+    await assertFails(setDoc(doc(db, 'products/x'), { id: 'x', name: 'X', price: 1, category: 'C', visible: true, position: 0 }));
+    await assertFails(setDoc(doc(db, 'config/menu'), { categories: [] }));
+    await assertFails(setDoc(doc(db, 'inventory/cag-1'), { stock: increment(-1), updatedAt: 1 }, { merge: true }));
   });
 
   test('solo puede saber si ya se hizo la configuración inicial', async () => {
