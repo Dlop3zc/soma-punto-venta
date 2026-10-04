@@ -1,181 +1,361 @@
-import { useState } from 'react';
-import { useCartStore } from '../store/useCartStore';
-import { ArrowLeft } from 'lucide-react';
+import { useState, type ReactNode } from 'react';
+import { X, Printer, CheckCircle2 } from 'lucide-react';
+import { useCartStore, type PaidOrder, type PaymentMethod } from '../store/useCartStore';
+import { usePrinterStore, TIP_PERCENTAGES } from '../store/usePrinterStore';
 
 interface CheckoutModalProps {
-  isOpen: boolean;
+  orderId: string;
   onClose: () => void;
 }
 
-export default function CheckoutModal({ isOpen, onClose }: CheckoutModalProps) {
-  const { orders, activeOrderId, payActiveOrder } = useCartStore();
-  const [view, setView] = useState<'selection' | 'cash'>('selection');
-  const [cashTendered, setCashTendered] = useState<string>('');
-  const [discountAmount, setDiscountAmount] = useState<string>('');
+const round2 = (n: number) => Math.round(n * 100) / 100;
+const money = (n: number) => `$${n.toFixed(2)}`;
+const parse = (v: string) => {
+  const n = parseFloat(v);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+};
 
-  const activeOrder = orders.find(o => o.id === activeOrderId);
-  const originalTotal = activeOrder?.total || 0;
-  const parsedDiscount = parseFloat(discountAmount) || 0;
-  const total = Math.max(0, originalTotal - parsedDiscount);
+// Se monta solo cuando hay una cuenta por cobrar, así el estado empieza limpio cada vez.
+export default function CheckoutModal({ orderId, onClose }: CheckoutModalProps) {
+  const { orders, payOrder } = useCartStore();
+  const { transport, settings, printReceipt } = usePrinterStore();
 
-  if (!isOpen) return null;
+  const [method, setMethod] = useState<PaymentMethod>('Efectivo');
+  const [discountInput, setDiscountInput] = useState('');
+  // Tarjeta: propina por porcentaje. Efectivo: propina por monto.
+  const [tipPercent, setTipPercent] = useState<number>(0);
+  const [customPercent, setCustomPercent] = useState('');
+  const [cashTipInput, setCashTipInput] = useState('');
+  const [cashTendered, setCashTendered] = useState('');
+  const [shouldPrint, setShouldPrint] = useState(settings.autoPrintOnPay);
+  const [paying, setPaying] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [paidOrder, setPaidOrder] = useState<PaidOrder | null>(null);
+  const [printStatus, setPrintStatus] = useState<'idle' | 'printing' | 'ok' | 'failed'>('idle');
 
-  const handleClose = () => {
-    setView('selection');
-    setCashTendered('');
-    setDiscountAmount('');
-    onClose();
+  const order = orders.find(o => o.id === orderId);
+
+  const subtotal = order?.total || 0;
+  const discount = round2(Math.min(parse(discountInput), subtotal));
+  const total = round2(subtotal - discount);
+
+  const effectivePercent = customPercent !== '' ? parse(customPercent) : tipPercent;
+  const tip = method === 'Tarjeta'
+    ? round2(total * effectivePercent / 100)
+    : round2(parse(cashTipInput));
+  const grandTotal = round2(total + tip);
+
+  const tendered = parse(cashTendered);
+  const change = round2(tendered - grandTotal);
+  const cashValid = tendered >= grandTotal;
+  const canPay = !paying && (method === 'Tarjeta' || cashValid);
+
+  const quickCash = [grandTotal, Math.ceil(grandTotal / 50) * 50, Math.ceil(grandTotal / 100) * 100, Math.ceil(grandTotal / 500) * 500]
+    .filter((v, i, a) => v > 0 && a.indexOf(v) === i);
+
+  const doPrint = async (paid: PaidOrder, reprint = false) => {
+    setPrintStatus('printing');
+    const ok = await printReceipt(paid, reprint);
+    setPrintStatus(ok ? 'ok' : 'failed');
   };
 
-  const handleCardPayment = () => {
-    payActiveOrder('Tarjeta', parsedDiscount);
-    handleClose();
+  const handlePay = async () => {
+    if (!canPay || !order) return;
+    setPaying(true);
+    setError(null);
+    try {
+      const paid = await payOrder(order.id, {
+        method,
+        discount,
+        tip,
+        tipPercent: method === 'Tarjeta' && effectivePercent > 0 ? effectivePercent : undefined,
+        cashTendered: method === 'Efectivo' ? tendered : undefined,
+        change: method === 'Efectivo' ? change : undefined,
+      });
+      if (!paid) throw new Error('No se pudo registrar el pago.');
+      setPaidOrder(paid);
+      if (shouldPrint && transport) doPrint(paid);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo registrar el pago.');
+    } finally {
+      setPaying(false);
+    }
   };
 
-  const handleCashConfirm = () => {
-    const tendered = parseFloat(cashTendered);
-    if (isNaN(tendered) || tendered < total) return;
-    
-    payActiveOrder('Efectivo', parsedDiscount, tendered, tendered - total);
-    handleClose();
-  };
+  // La cuenta desapareció (cobrada en otro dispositivo) y no la cobramos aquí
+  if (!order && !paidOrder) {
+    return (
+      <Shell onClose={onClose} title="Cobrar">
+        <div className="p-10 text-center text-zinc-400 text-xl">Esta cuenta ya no está abierta.</div>
+      </Shell>
+    );
+  }
 
-  const renderSelectionView = () => (
-    <>
-      <div className="p-10 text-center border-b border-zinc-800">
-        <h2 className="text-4xl font-bold text-zinc-400 mb-4">Total a Cobrar</h2>
-        <div className="text-7xl font-extrabold text-white mb-6">${total.toFixed(2)}</div>
-        
-        <div className="flex flex-col items-center gap-2 max-w-sm mx-auto">
-          <label className="text-zinc-400 font-medium">Aplicar Descuento / Promoción ($)</label>
-          <input 
-            type="number"
-            value={discountAmount}
-            onChange={(e) => setDiscountAmount(e.target.value)}
-            className="w-full bg-zinc-800 border-2 border-zinc-700 text-white text-2xl font-bold rounded-xl py-3 px-4 text-center focus:outline-none focus:border-emerald-500 transition-colors"
-            placeholder="0.00"
-          />
-        </div>
-      </div>
-      
-      <div className="p-10 grid grid-cols-2 gap-6 bg-zinc-950">
-        <button
-          onClick={() => setView('cash')}
-          className="flex flex-col items-center justify-center gap-4 py-16 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white rounded-2xl transition-colors shadow-lg shadow-emerald-600/20"
-        >
-          <span className="text-4xl font-black tracking-wider">EFECTIVO</span>
-        </button>
-        
-        <button
-          onClick={handleCardPayment}
-          className="flex flex-col items-center justify-center gap-4 py-16 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white rounded-2xl transition-colors shadow-lg shadow-blue-600/20"
-        >
-          <span className="text-4xl font-black tracking-wider">TARJETA</span>
-        </button>
-      </div>
-
-      <button
-        onClick={handleClose}
-        className="py-6 text-xl font-bold text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900 transition-colors"
-      >
-        Cancelar
-      </button>
-    </>
-  );
-
-  const tenderedAmount = parseFloat(cashTendered) || 0;
-  const change = tenderedAmount - total;
-  const isCashValid = tenderedAmount >= total;
-
-  const quickAmounts = [
-    total,
-    Math.ceil(total / 50) * 50,
-    Math.ceil(total / 100) * 100,
-    Math.ceil(total / 500) * 500
-  ].filter((v, i, a) => a.indexOf(v) === i && v >= total);
-
-  const renderCashView = () => (
-    <>
-      <div className="p-6 border-b border-zinc-800 flex items-center bg-zinc-950">
-        <button 
-          onClick={() => setView('selection')}
-          className="p-3 bg-zinc-800 hover:bg-zinc-700 rounded-full text-zinc-300 transition-colors"
-        >
-          <ArrowLeft size={28} />
-        </button>
-        <h2 className="text-3xl font-bold text-zinc-100 flex-1 text-center pr-12">Pago en Efectivo</h2>
-      </div>
-
-      <div className="p-8 grid grid-cols-2 gap-8">
-        <div className="space-y-6">
-          <div className="bg-zinc-950 p-6 rounded-2xl border border-zinc-800 text-center">
-            <p className="text-zinc-400 text-xl font-medium mb-2">Total a Pagar</p>
-            <p className="text-5xl font-bold text-white">${total.toFixed(2)}</p>
-          </div>
-
-          <div>
-            <label className="block text-zinc-400 text-lg font-medium mb-2">Monto Recibido</label>
-            <div className="relative">
-              <span className="absolute left-6 top-1/2 -translate-y-1/2 text-4xl font-bold text-zinc-500">$</span>
-              <input 
-                type="number"
-                value={cashTendered}
-                onChange={(e) => setCashTendered(e.target.value)}
-                className="w-full bg-zinc-800 border-2 border-zinc-700 text-white text-5xl font-bold rounded-2xl py-6 pl-16 pr-6 focus:outline-none focus:border-emerald-500 transition-colors"
-                placeholder="0.00"
-                autoFocus
-              />
+  // ---------- Pantalla final ----------
+  if (paidOrder) {
+    return (
+      <Shell onClose={onClose} title={`${paidOrder.name} · Cobrada`}>
+        <div className="p-6 md:p-10 flex flex-col items-center text-center gap-5 md:gap-6 overflow-y-auto">
+          <CheckCircle2 size={72} className="text-emerald-400" />
+          {paidOrder.paymentMethod === 'Efectivo' ? (
+            <div>
+              <p className="text-zinc-400 text-2xl font-medium">Cambio a devolver</p>
+              <p className="text-6xl md:text-7xl font-black text-emerald-400">{money(paidOrder.change || 0)}</p>
             </div>
+          ) : (
+            <p className="text-3xl font-bold text-white">Pago con tarjeta registrado</p>
+          )}
+          <div className="text-zinc-400 text-lg">
+            Venta {money(paidOrder.total)}
+            {!!paidOrder.tip && <> · Propina {money(paidOrder.tip)}</>}
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            {quickAmounts.map(amount => (
+          {transport ? (
+            <div className="flex flex-col items-center gap-2">
               <button
-                key={amount}
-                onClick={() => setCashTendered(amount.toString())}
-                className="py-4 bg-zinc-800 hover:bg-zinc-700 text-xl font-bold text-zinc-200 rounded-xl transition-colors border border-zinc-700"
+                onClick={() => doPrint(paidOrder, printStatus === 'ok')}
+                disabled={printStatus === 'printing'}
+                className="flex items-center gap-2 px-6 py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-bold transition-colors disabled:opacity-50"
               >
-                ${amount.toFixed(2)}
+                <Printer size={20} />
+                {printStatus === 'printing' ? 'Imprimiendo...' : printStatus === 'ok' ? 'Reimprimir ticket' : 'Imprimir ticket'}
+              </button>
+              {printStatus === 'failed' && (
+                <p className="text-red-400 text-sm">{usePrinterStore.getState().lastError || 'No se pudo imprimir.'}</p>
+              )}
+            </div>
+          ) : (
+            <p className="text-zinc-500 text-sm">Sin impresora conectada en este equipo.</p>
+          )}
+        </div>
+        <button
+          onClick={onClose}
+          className="py-5 md:py-6 text-2xl font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition-colors shrink-0"
+        >
+          Listo
+        </button>
+      </Shell>
+    );
+  }
+
+  // ---------- Formulario de cobro ----------
+  return (
+    <Shell onClose={onClose} title={`Cobrar ${order!.name}`}>
+      <div className="grid md:grid-cols-2 gap-5 md:gap-6 p-4 md:p-6 overflow-y-auto min-h-0">
+        <div className="space-y-6">
+          {/* Método */}
+          <div className="grid grid-cols-2 gap-3">
+            {(['Efectivo', 'Tarjeta'] as const).map(m => (
+              <button
+                key={m}
+                onClick={() => setMethod(m)}
+                className={`py-4 md:py-5 rounded-2xl text-xl md:text-2xl font-black tracking-wider transition-colors ${
+                  method === m
+                    ? m === 'Efectivo' ? 'bg-emerald-600 text-white' : 'bg-blue-600 text-white'
+                    : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                }`}
+              >
+                {m.toUpperCase()}
               </button>
             ))}
           </div>
-        </div>
 
-        <div className="flex flex-col justify-between">
-          <div className={`p-8 rounded-3xl border-2 text-center transition-colors ${
-            isCashValid 
-              ? 'bg-emerald-950/30 border-emerald-500/50' 
-              : 'bg-zinc-950 border-zinc-800'
-          }`}>
-            <p className={`text-2xl font-medium mb-4 ${isCashValid ? 'text-emerald-400' : 'text-zinc-500'}`}>
-              Cambio a Devolver
-            </p>
-            <p className={`text-7xl font-black ${isCashValid ? 'text-emerald-400' : 'text-zinc-600'}`}>
-              ${isCashValid ? change.toFixed(2) : '0.00'}
-            </p>
+          {/* Descuento */}
+          <div>
+            <label className="block text-zinc-400 font-medium mb-2">Descuento / Promoción ($)</label>
+            <input
+              type="number"
+              min={0}
+              max={subtotal}
+              value={discountInput}
+              onChange={(e) => setDiscountInput(e.target.value)}
+              placeholder="0.00"
+              className="w-full bg-zinc-800 border-2 border-zinc-700 text-white text-xl font-bold rounded-xl py-3 px-4 focus:outline-none focus:border-emerald-500"
+            />
+            {parse(discountInput) > subtotal && (
+              <p className="text-amber-400 text-sm mt-1">El descuento no puede ser mayor al total; se aplicará {money(subtotal)}.</p>
+            )}
           </div>
 
+          {/* Propina */}
+          <div>
+            <label className="block text-zinc-400 font-medium mb-2">
+              Propina {method === 'Tarjeta' ? '(porcentaje)' : '(monto en efectivo)'}
+            </label>
+            {method === 'Tarjeta' ? (
+              <div className="grid grid-cols-5 gap-2">
+                {[0, ...TIP_PERCENTAGES].map(p => (
+                  <button
+                    key={p}
+                    onClick={() => { setTipPercent(p); setCustomPercent(''); }}
+                    className={`py-3 rounded-xl font-bold transition-colors ${
+                      customPercent === '' && tipPercent === p ? 'bg-blue-600 text-white' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+                    }`}
+                  >
+                    {p === 0 ? 'Sin' : `${p}%`}
+                  </button>
+                ))}
+                <div className="relative">
+                  <input
+                    type="number"
+                    min={0}
+                    value={customPercent}
+                    onChange={(e) => setCustomPercent(e.target.value)}
+                    placeholder="Otro"
+                    className={`w-full h-full bg-zinc-800 border-2 text-white font-bold rounded-xl px-2 pr-6 text-center focus:outline-none ${
+                      customPercent !== '' ? 'border-blue-500' : 'border-zinc-700'
+                    }`}
+                  />
+                  <span className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 font-bold">%</span>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xl font-bold text-zinc-500">$</span>
+                  <input
+                    type="number"
+                    min={0}
+                    value={cashTipInput}
+                    onChange={(e) => setCashTipInput(e.target.value)}
+                    placeholder="0.00"
+                    className="w-full bg-zinc-800 border-2 border-zinc-700 text-white text-xl font-bold rounded-xl py-3 pl-10 pr-4 focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                  {TIP_PERCENTAGES.map(p => {
+                    const amount = round2(total * p / 100);
+                    return (
+                      <button
+                        key={p}
+                        onClick={() => setCashTipInput(amount.toString())}
+                        className="px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm font-bold"
+                      >
+                        {p}% = {money(amount)}
+                      </button>
+                    );
+                  })}
+                  {tendered > total && (
+                    <button
+                      onClick={() => setCashTipInput(round2(tendered - total).toString())}
+                      className="px-3 py-2 rounded-lg bg-emerald-900/40 hover:bg-emerald-900 text-emerald-300 text-sm font-bold"
+                    >
+                      Deja el cambio ({money(round2(tendered - total))})
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Efectivo recibido */}
+          {method === 'Efectivo' && (
+            <div>
+              <label className="block text-zinc-400 font-medium mb-2">Efectivo recibido</label>
+              <div className="relative">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-3xl font-bold text-zinc-500">$</span>
+                <input
+                  type="number"
+                  min={0}
+                  value={cashTendered}
+                  onChange={(e) => setCashTendered(e.target.value)}
+                  placeholder="0.00"
+                  className="w-full bg-zinc-800 border-2 border-zinc-700 text-white text-3xl font-bold rounded-xl py-4 pl-12 pr-4 focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2">
+                {quickCash.map(a => (
+                  <button
+                    key={a}
+                    onClick={() => setCashTendered(a.toString())}
+                    className="py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold"
+                  >
+                    {money(a)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Resumen */}
+        <div className="flex flex-col gap-4">
+          <div className="bg-zinc-950 rounded-2xl border border-zinc-800 p-4 md:p-6 space-y-2 md:space-y-3 text-base md:text-lg">
+            <Row label="Subtotal" value={money(subtotal)} />
+            {discount > 0 && <Row label="Descuento" value={`-${money(discount)}`} className="text-amber-400" />}
+            <Row label="Total venta" value={money(total)} className="text-white font-bold" />
+            <Row
+              label={method === 'Tarjeta' && effectivePercent > 0 ? `Propina (${effectivePercent}%)` : 'Propina'}
+              value={money(tip)}
+              className="text-sky-300"
+            />
+            <div className="border-t border-zinc-800 pt-3">
+              <Row label="Total a cobrar" value={money(grandTotal)} className="text-2xl md:text-3xl font-black text-white" />
+            </div>
+            {method === 'Efectivo' && (
+              <Row
+                label="Cambio"
+                value={cashValid ? money(change) : 'Falta efectivo'}
+                className={`text-2xl font-bold ${cashValid ? 'text-emerald-400' : 'text-zinc-600'}`}
+              />
+            )}
+          </div>
+
+          {transport && (
+            <label className="flex items-center gap-3 text-zinc-300 font-medium cursor-pointer">
+              <input
+                type="checkbox"
+                checked={shouldPrint}
+                onChange={(e) => setShouldPrint(e.target.checked)}
+                className="w-5 h-5 accent-emerald-500"
+              />
+              Imprimir ticket al cobrar
+            </label>
+          )}
+
+          {error && <p className="text-red-400 font-medium">{error}</p>}
+
           <button
-            onClick={handleCashConfirm}
-            disabled={!isCashValid}
-            className={`w-full py-8 text-3xl font-black rounded-2xl uppercase tracking-wider transition-all mt-6 ${
-              isCashValid
+            onClick={handlePay}
+            disabled={!canPay}
+            className={`mt-auto w-full py-5 md:py-6 text-xl md:text-2xl font-black rounded-2xl uppercase tracking-wider transition-colors ${
+              canPay
                 ? 'bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-zinc-950 shadow-xl shadow-emerald-500/20'
                 : 'bg-zinc-800 text-zinc-600 cursor-not-allowed'
             }`}
           >
-            Confirmar Cobro
+            {paying ? 'Registrando...' : `Confirmar cobro ${money(grandTotal)}`}
           </button>
         </div>
       </div>
-    </>
+    </Shell>
   );
+}
 
+function Shell({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-      <div className="bg-zinc-900 border border-zinc-700 rounded-3xl w-full max-w-4xl overflow-hidden shadow-2xl flex flex-col">
-        {view === 'selection' ? renderSelectionView() : renderCashView()}
+    <div className="modal-backdrop">
+      <div className="modal-panel max-w-5xl">
+        <div className="px-4 py-3 md:p-6 border-b border-zinc-800 flex items-center justify-between gap-3 bg-zinc-950 shrink-0">
+          <h2 className="text-2xl md:text-3xl font-bold text-white truncate">{title}</h2>
+          <button
+            onClick={onClose}
+            className="p-2 bg-zinc-800 hover:bg-zinc-700 rounded-full text-zinc-400 hover:text-white transition-colors"
+          >
+            <X size={24} />
+          </button>
+        </div>
+        {children}
       </div>
+    </div>
+  );
+}
+
+function Row({ label, value, className = 'text-zinc-300' }: { label: string; value: string; className?: string }) {
+  return (
+    <div className={`flex justify-between items-baseline ${className}`}>
+      <span>{label}</span>
+      <span>{value}</span>
     </div>
   );
 }
