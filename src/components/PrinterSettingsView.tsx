@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
-import { Printer, Usb, Cable, Unplug, FileText, Banknote } from 'lucide-react';
-import { usePrinterStore } from '../store/usePrinterStore';
+import { Printer, Usb, Cable, Unplug, FileText, Banknote, Monitor } from 'lucide-react';
+import { usePrinterStore, detectDevice, recommendedMode, type PrintMode } from '../store/usePrinterStore';
 import { isSerialSupported, isUsbSupported } from '../printer/transport';
 
 const BAUD_RATES = [9600, 19200, 38400, 57600, 115200];
@@ -13,6 +13,14 @@ export default function PrinterSettingsView() {
 
   const supported = settings.connectionType === 'serial' ? isSerialSupported() : isUsbSupported();
   const busy = status === 'connecting' || status === 'printing';
+  const device = detectDevice();
+  const recommended = recommendedMode();
+
+  const changeMode = async (mode: PrintMode) => {
+    if (mode === settings.mode) return;
+    if (mode === 'system' && transport) await disconnect();
+    updateSettings({ mode });
+  };
 
   return (
     <div className="flex-1 h-full bg-zinc-900 flex flex-col overflow-hidden">
@@ -21,13 +29,73 @@ export default function PrinterSettingsView() {
           <span>🖨️</span> Impresora de Tickets
         </h1>
         <p className="text-zinc-400 mt-1">
-          Impresión directa ESC/POS desde este equipo. La configuración se guarda en este navegador.
+          Configura cómo imprime ESTE equipo. Se guarda en este navegador.
         </p>
       </div>
 
       <div className="flex-1 overflow-y-auto p-3 md:p-6">
         <div className="grid lg:grid-cols-2 gap-6 max-w-6xl">
-          {/* Conexión */}
+          {/* Modo de impresión */}
+          <Card title="¿Cómo imprime este equipo?" className="lg:col-span-2">
+            {device === 'ios' && (
+              <div className="rounded-xl p-4 border bg-amber-950/30 border-amber-500/30 text-amber-300 text-sm">
+                En iPad o iPhone no se puede usar una impresora USB. Imprime desde una computadora o un
+                Android conectado a la impresora; aquí solo funcionaría una impresora con AirPrint (Wi‑Fi).
+              </div>
+            )}
+            <div className="grid sm:grid-cols-2 gap-3">
+              <ChoiceButton
+                active={settings.mode === 'system'}
+                disabled={false}
+                onClick={() => changeMode('system')}
+                icon={<Monitor size={22} />}
+                title="Impresora del sistema"
+                subtitle={`Driver instalado en Windows o Mac${recommended === 'system' ? ' · recomendado aquí' : ''}`}
+              />
+              <ChoiceButton
+                active={settings.mode === 'direct'}
+                disabled={false}
+                onClick={() => changeMode('direct')}
+                icon={<Usb size={22} />}
+                title="USB directo"
+                subtitle={`Chrome/Edge sin driver; ideal en Android${recommended === 'direct' ? ' · recomendado aquí' : ''}`}
+              />
+            </div>
+          </Card>
+
+          {settings.mode === 'system' ? (
+          <Card title="Impresora del sistema">
+            <ol className="list-decimal pl-5 space-y-2 text-sm text-zinc-300">
+              <li>
+                Conecta la impresora por USB e instala su driver (en Windows suele aparecer como
+                <b> POS-58</b>; viene en el CD o en la página del fabricante).
+              </li>
+              <li>
+                Presiona <b>Imprimir prueba</b>. En el cuadro de impresión elige esa impresora, papel de
+                <b> 58 mm</b> (o 80 mm), márgenes <b>Ninguno</b> y quita encabezados y pies de página.
+                Chrome recuerda esta elección.
+              </li>
+              <li>
+                Opcional, para que no aparezca el cuadro cada vez: abre la app desde un acceso directo de
+                Chrome con <code className="text-amber-300">--kiosk-printing</code> al final del destino
+                (clic derecho al acceso directo → Propiedades → Destino).
+              </li>
+            </ol>
+            {lastError && <p className="text-red-400 text-sm">{lastError}</p>}
+            <div className="flex flex-wrap gap-3">
+              <button
+                onClick={printTest}
+                className="flex items-center gap-2 px-5 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold"
+              >
+                <FileText size={20} /> Imprimir prueba
+              </button>
+            </div>
+            <p className="text-zinc-500 text-xs">
+              En este modo no se puede abrir el cajón de dinero desde la app. Si tu cajón se conecta a la
+              impresora, el driver suele tener una opción para abrirlo al imprimir.
+            </p>
+          </Card>
+          ) : (
           <Card title="Conexión">
             <div className="grid grid-cols-2 gap-3">
               <ChoiceButton
@@ -35,7 +103,7 @@ export default function PrinterSettingsView() {
                 disabled={!!transport}
                 onClick={() => updateSettings({ connectionType: 'usb' })}
                 icon={<Usb size={22} />}
-                title="USB directo"
+                title="Cable USB"
                 subtitle="WebUSB"
               />
               <ChoiceButton
@@ -119,6 +187,7 @@ export default function PrinterSettingsView() {
               </ul>
             </details>
           </Card>
+          )}
 
           {/* Formato del ticket */}
           <Card title="Formato del ticket">
@@ -177,16 +246,21 @@ export default function PrinterSettingsView() {
               onChange={(v) => updateSettings({ autoPrintOnPay: v })}
               label="Imprimir ticket automáticamente al cobrar"
             />
-            <Check
-              checked={settings.openDrawerOnCash}
-              onChange={(v) => updateSettings({ openDrawerOnCash: v })}
-              label="Abrir cajón de dinero en pagos en efectivo"
-            />
-            <Check
-              checked={settings.useAccents}
-              onChange={(v) => updateSettings({ useAccents: v })}
-              label="Imprimir acentos y ñ (desactívalo si salen símbolos raros)"
-            />
+            {/* Opciones de los comandos ESC/POS; con el driver del sistema no aplican */}
+            {settings.mode === 'direct' && (
+              <>
+                <Check
+                  checked={settings.openDrawerOnCash}
+                  onChange={(v) => updateSettings({ openDrawerOnCash: v })}
+                  label="Abrir cajón de dinero en pagos en efectivo"
+                />
+                <Check
+                  checked={settings.useAccents}
+                  onChange={(v) => updateSettings({ useAccents: v })}
+                  label="Imprimir acentos y ñ (desactívalo si salen símbolos raros)"
+                />
+              </>
+            )}
           </Card>
         </div>
       </div>
@@ -194,9 +268,9 @@ export default function PrinterSettingsView() {
   );
 }
 
-function Card({ title, children }: { title: string; children: ReactNode }) {
+function Card({ title, children, className = '' }: { title: string; children: ReactNode; className?: string }) {
   return (
-    <section className="bg-zinc-950 border border-zinc-800 rounded-2xl p-6 space-y-5">
+    <section className={`bg-zinc-950 border border-zinc-800 rounded-2xl p-4 md:p-6 space-y-5 ${className}`}>
       <h2 className="text-xl font-bold text-white">{title}</h2>
       {children}
     </section>

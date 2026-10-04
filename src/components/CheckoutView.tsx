@@ -1,6 +1,6 @@
 import { useCartStore } from '../store/useCartStore';
 import { useAuthStore } from '../store/useAuthStore';
-import { usePrinterStore } from '../store/usePrinterStore';
+import { usePrinterStore, selectCanPrint } from '../store/usePrinterStore';
 import { useState } from 'react';
 import { Printer, Trash2 } from 'lucide-react';
 import CheckoutModal from './CheckoutModal';
@@ -9,7 +9,8 @@ import SplitBillModal from './SplitBillModal';
 export default function CheckoutView() {
   const { orders, setActiveOrder, deleteEmptyOrder } = useCartStore();
   const { activeUser } = useAuthStore();
-  const { transport, printPreBill } = usePrinterStore();
+  const printPreBill = usePrinterStore(s => s.printPreBill);
+  const canPrint = usePrinterStore(selectCanPrint);
   const [printingId, setPrintingId] = useState<string | null>(null);
   const [checkoutOrderId, setCheckoutOrderId] = useState<string | null>(null);
   const [splitBillOrderId, setSplitBillOrderId] = useState<string | null>(null);
@@ -127,7 +128,7 @@ export default function CheckoutView() {
                   >
                     <span>✂️</span> Separar Cuenta
                   </button>
-                  {transport && (
+                  {canPrint && (
                     <button
                       onClick={() => handlePreBill(order.id)}
                       disabled={order.items.length === 0 || printingId === order.id}

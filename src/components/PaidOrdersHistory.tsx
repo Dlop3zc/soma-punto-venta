@@ -1,11 +1,12 @@
 import { useMemo } from 'react';
 import { useCartStore } from '../store/useCartStore';
-import { usePrinterStore } from '../store/usePrinterStore';
+import { usePrinterStore, selectCanPrint } from '../store/usePrinterStore';
 import { exportPaidOrdersToCSV } from '../utils/exportToCSV';
 
 export default function PaidOrdersHistory({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) {
   const { paidOrders, clearData } = useCartStore();
-  const { transport, printReceipt } = usePrinterStore();
+  const printReceipt = usePrinterStore(s => s.printReceipt);
+  const canPrint = usePrinterStore(selectCanPrint);
 
   const tips = useMemo(() => {
     const result = { total: 0, cash: 0, card: 0, byWaiter: {} as Record<string, number> };
@@ -186,7 +187,7 @@ export default function PaidOrdersHistory({ isOpen, onClose }: { isOpen: boolean
                     <span className="text-2xl md:text-3xl font-bold text-white md:w-32 text-right">
                       ${order.total.toFixed(2)}
                     </span>
-                    {transport && (
+                    {canPrint && (
                       <button
                         onClick={() => handleReprint(order.id)}
                         className="p-3 rounded-xl bg-zinc-700 hover:bg-zinc-600 text-zinc-200 transition-colors"

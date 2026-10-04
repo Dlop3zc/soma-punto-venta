@@ -2,11 +2,19 @@ import { create } from 'zustand';
 import {
   requestPrinter, reconnectPrinter, type ConnectionType, type PrinterTransport,
 } from '../printer/transport';
-import { buildReceipt, buildPreBill, buildTestPage, type TicketSettings } from '../printer/tickets';
+import {
+  buildReceipt, buildPreBill, buildTestPage, buildReceiptHtml, buildPreBillHtml, buildTestPageHtml, type TicketSettings,
+} from '../printer/tickets';
+import { printHtml } from '../printer/browserPrint';
 import type { Order, PaidOrder } from './useCartStore';
+
+// - 'system': impresora instalada en Windows/Mac; se imprime con el diálogo del navegador.
+// - 'direct': USB / puerto serie directo con comandos ESC/POS (Chrome/Edge; ideal en Android).
+export type PrintMode = 'system' | 'direct';
 
 // La impresora está conectada a ESTE equipo, así que la configuración se guarda en el navegador.
 export interface PrinterSettings extends TicketSettings {
+  mode: PrintMode;
   connectionType: ConnectionType;
   baudRate: number;
   autoPrintOnPay: boolean;
@@ -16,10 +24,27 @@ export const TIP_PERCENTAGES = [10, 15, 20];
 
 const STORAGE_KEY = 'soma-printer-settings';
 
+export type DeviceKind = 'android' | 'ios' | 'desktop';
+
+export function detectDevice(): DeviceKind {
+  const ua = typeof navigator === 'undefined' ? '' : navigator.userAgent;
+  if (/Android/i.test(ua)) return 'android';
+  // iPadOS se presenta como Mac; se distingue por la pantalla táctil
+  if (/iPhone|iPad|iPod/i.test(ua) || (/Macintosh/i.test(ua) && navigator.maxTouchPoints > 1)) return 'ios';
+  return 'desktop';
+}
+
+// Android con Chrome toma la impresora USB directo (cable OTG); en PC/Mac el sistema
+// ya instaló su driver, así que se imprime a través de él.
+export function recommendedMode(): PrintMode {
+  return detectDevice() === 'android' && typeof navigator !== 'undefined' && 'usb' in navigator ? 'direct' : 'system';
+}
+
 const DEFAULT_SETTINGS: PrinterSettings = {
+  mode: 'system',
   connectionType: 'usb',
   baudRate: 9600,
-  paperWidth: 80,
+  paperWidth: 58,
   useAccents: true,
   businessName: 'SOMA',
   headerLines: '',
@@ -32,10 +57,18 @@ const DEFAULT_SETTINGS: PrinterSettings = {
 function loadSettings(): PrinterSettings {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+    if (raw) {
+      const saved = JSON.parse(raw) as Partial<PrinterSettings>;
+      // Configuraciones anteriores a los modos: ya usaban la impresión directa
+      return { ...DEFAULT_SETTINGS, mode: 'direct', ...saved };
+    }
   } catch { /* almacenamiento no disponible */ }
-  return DEFAULT_SETTINGS;
+  return { ...DEFAULT_SETTINGS, mode: recommendedMode() };
 }
+
+// Hay forma de imprimir en este equipo (modo sistema siempre; directo si está conectada)
+export const selectCanPrint = (s: { settings: PrinterSettings; transport: PrinterTransport | null }) =>
+  s.settings.mode === 'system' || !!s.transport;
 
 function saveSettings(settings: PrinterSettings) {
   try {
@@ -70,6 +103,13 @@ const errorMessage = (e: unknown) => {
 };
 
 export const usePrinterStore = create<PrinterState>((set, get) => {
+  const viaSystem = async (html: string): Promise<boolean> => {
+    set({ lastError: null });
+    const ok = await printHtml(html);
+    if (!ok) set({ lastError: 'El navegador no pudo abrir la impresión.' });
+    return ok;
+  };
+
   const send = async (data: Uint8Array): Promise<boolean> => {
     let { transport } = get();
     if (!transport) {
@@ -134,11 +174,26 @@ export const usePrinterStore = create<PrinterState>((set, get) => {
       set({ transport: null, status: 'disconnected', deviceLabel: null });
     },
 
-    printReceipt: (order, reprint = false) => send(buildReceipt(order, get().settings, { reprint })),
+    printReceipt: (order, reprint = false) => {
+      const { settings } = get();
+      return settings.mode === 'system'
+        ? viaSystem(buildReceiptHtml(order, settings, { reprint }))
+        : send(buildReceipt(order, settings, { reprint }));
+    },
 
-    printPreBill: (order) => send(buildPreBill(order, get().settings, TIP_PERCENTAGES)),
+    printPreBill: (order) => {
+      const { settings } = get();
+      return settings.mode === 'system'
+        ? viaSystem(buildPreBillHtml(order, settings, TIP_PERCENTAGES))
+        : send(buildPreBill(order, settings, TIP_PERCENTAGES));
+    },
 
-    printTest: () => send(buildTestPage(get().settings, get().deviceLabel || 'desconocida')),
+    printTest: () => {
+      const { settings, deviceLabel } = get();
+      return settings.mode === 'system'
+        ? viaSystem(buildTestPageHtml(settings, 'Impresora del sistema'))
+        : send(buildTestPage(settings, deviceLabel || 'desconocida'));
+    },
 
     openDrawer: () => send(new Uint8Array([0x1b, 0x70, 0x00, 0x19, 0xfa])),
   };

@@ -125,7 +125,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         return;
       }
 
-      unsubProfile = onSnapshot(doc(db, 'users', fbUser.uid), (snap) => {
+      unsubProfile = onSnapshot(doc(db, 'users', fbUser.uid), { includeMetadataChanges: true }, (snap) => {
+        // Un perfil recién escrito llega primero desde la caché local; las reglas del servidor
+        // aún no lo ven, así que los listeners de datos fallarían. Esperar la confirmación.
+        if (snap.metadata.hasPendingWrites) return;
         const profile = snap.exists() ? ({ ...snap.data(), id: snap.id } as UserProfile) : null;
         if (!profile && creatingOwnProfile) return;
         if (!profile || profile.active !== true) {
