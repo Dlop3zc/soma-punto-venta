@@ -36,8 +36,32 @@ npm run test:rules
   `mesero1@usuarios.soma-pos.app`. No se envían correos a esas direcciones.
 - Las reglas de `firestore.rules` exigen sesión con un perfil activo y limitan cada rol a
   lo que necesita. Un usuario **desactivado** pierde el acceso al instante.
-- La configuración web de Firebase en `src/firebase.ts` es pública por diseño; lo que
-  protege los datos son Authentication y las reglas.
+- La configuración web de Firebase (variables `VITE_FIREBASE_*`) es pública por diseño;
+  lo que protege los datos son Authentication y las reglas.
+
+## Pruebas y producción
+
+La app se conecta al proyecto de Firebase indicado por las variables `VITE_FIREBASE_*`:
+
+- **`.env`** (incluido en el repo) apunta al proyecto de **pruebas**. Es lo que se usa por
+  defecto en `npm run dev` y en cualquier build que no defina otras variables.
+- **Producción:** define **todas** las variables de `.env.example` con los datos del proyecto
+  real (consola de Firebase → Configuración del proyecto → Tus apps → Configuración del SDK):
+  - en el hosting (Vercel → Settings → Environment Variables, ambiente *Production*), o
+  - en un archivo `.env.production.local` (no se sube a git) si compilas en tu computadora.
+
+  Las variables del hosting tienen prioridad sobre `.env`.
+- `VITE_ENVIRONMENT_LABEL` muestra una etiqueta (por ejemplo **PRUEBAS**) en el encabezado
+  y en el login. En producción déjala vacía.
+
+Para publicar reglas y funciones en cada proyecto:
+
+```bash
+npx firebase login
+npm run deploy:rules                        # proyecto de pruebas
+npx firebase use --add                      # una vez: elegir el proyecto real y llamarlo "produccion"
+npm run deploy:rules:prod                   # proyecto de producción
+```
 
 ## Puesta en producción de la seguridad (una sola vez)
 
@@ -48,11 +72,8 @@ npm run test:rules
 1. **Activar el inicio de sesión con contraseña:** consola de Firebase → Authentication →
    *Comenzar* → Sign-in method → **Correo electrónico/contraseña** → Habilitar.
 2. **Publicar la app nueva** (fusionar a `main` / desplegar como de costumbre).
-3. **Publicar las reglas:**
-   ```bash
-   npx firebase login
-   npm run deploy:rules
-   ```
+3. **Publicar las reglas** (`npm run deploy:rules` en pruebas, `npm run deploy:rules:prod`
+   en producción; ver la sección anterior).
 4. Abrir la app: aparece **Configuración inicial**. Crear la cuenta del administrador.
 5. En **Usuarios**, dar de alta a cada mesero y a cocina con una contraseña inicial.
    Cada quien puede cambiarla después con el botón 🔑.
@@ -68,9 +89,8 @@ propia contraseña. Con ellas, el admin también puede **restablecer contraseña
 y borrar cuentas por completo.
 
 1. Cambiar el proyecto al plan **Blaze** en la consola de Firebase.
-2. `cd functions && npm install && cd .. && npm run deploy:functions`
-3. Compilar la app con la variable `VITE_ADMIN_FUNCTIONS=true` (en Vercel: Settings →
-   Environment Variables) y volver a desplegar.
+2. `cd functions && npm install && cd .. && npm run deploy:functions` (o `deploy:functions:prod`).
+3. Definir `VITE_ADMIN_FUNCTIONS=true` en las variables de ese ambiente y volver a desplegar.
 
 ## Impresora de tickets
 

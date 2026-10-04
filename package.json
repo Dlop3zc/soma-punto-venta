@@ -11,8 +11,10 @@
     "test:rules": "firebase emulators:exec --only firestore --project demo-soma \"node --test tests/firestore.rules.test.mjs\"",
     "emulators": "firebase emulators:start --only auth,firestore --project demo-soma",
     "dev:emulators": "VITE_USE_EMULATORS=true vite --host",
-    "deploy:rules": "firebase deploy --only firestore:rules",
-    "deploy:functions": "firebase deploy --only functions"
+    "deploy:rules": "firebase deploy --only firestore:rules --project pruebas",
+    "deploy:functions": "firebase deploy --only functions --project pruebas",
+    "deploy:rules:prod": "firebase deploy --only firestore:rules --project produccion",
+    "deploy:functions:prod": "firebase deploy --only functions --project produccion"
   },
   "dependencies": {
     "firebase": "^12.19.0",

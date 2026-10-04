@@ -3,17 +3,27 @@ import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
 import { getAuth, connectAuthEmulator, type Auth } from "firebase/auth";
 import { getFunctions, connectFunctionsEmulator } from "firebase/functions";
 
-// La configuración web de Firebase es pública por diseño: la seguridad la dan
-// Firebase Authentication y las reglas de Firestore (firestore.rules).
+// El proyecto de Firebase se elige con variables de entorno (ver `.env` y `.env.example`).
+// Estos valores son públicos por diseño: la seguridad la dan Firebase Authentication y
+// las reglas de Firestore (firestore.rules).
+const env = import.meta.env;
 const firebaseConfig = {
-  apiKey: "AIzaSyDOda3blcbXK2I1VgGaRyMDPSP5BrnlLHY",
-  authDomain: "punto-venta-7fa81.firebaseapp.com",
-  projectId: "punto-venta-7fa81",
-  storageBucket: "punto-venta-7fa81.firebasestorage.app",
-  messagingSenderId: "782980453983",
-  appId: "1:782980453983:web:7a6f62e43dd75c09362dea",
-  measurementId: "G-X2Z8LTQBRS"
+  apiKey: env.VITE_FIREBASE_API_KEY,
+  authDomain: env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: env.VITE_FIREBASE_APP_ID,
+  measurementId: env.VITE_FIREBASE_MEASUREMENT_ID,
 };
+
+const missing = (['apiKey', 'authDomain', 'projectId', 'appId'] as const).filter(k => !firebaseConfig[k]);
+if (missing.length) {
+  throw new Error(`Falta la configuración de Firebase (${missing.join(', ')}). Revisa las variables VITE_FIREBASE_* en .env.example.`);
+}
+
+// Etiqueta visible para saber a qué base está conectada la app (p. ej. "Pruebas")
+export const environmentLabel = env.VITE_ENVIRONMENT_LABEL?.trim() || '';
 
 // Desarrollo local con `firebase emulators:start` (ver README)
 const useEmulators = import.meta.env.VITE_USE_EMULATORS === 'true';

@@ -15,6 +15,7 @@ import { useAuthStore, type UserRole } from './store/useAuthStore';
 import { useInventoryStore } from './store/useInventoryStore';
 import { usePrinterStore } from './store/usePrinterStore';
 import SomaLogo from './components/icons/SomaLogo';
+import { environmentLabel } from './firebase';
 
 type View = 'pos' | 'kitchen' | 'checkout' | 'dashboard' | 'users' | 'inventory' | 'printer';
 
@@ -127,11 +128,18 @@ function App() {
       {/* Top Navigation / Header */}
       <header className="border-b border-zinc-800 bg-zinc-900/50 shrink-0 pt-safe">
         <div className="h-14 md:h-16 flex items-center justify-between px-3 md:px-6">
-          <SomaLogo className="w-16 md:w-24 text-white" />
-          <div className="flex items-center gap-2 md:gap-4">
+          <div className="flex items-center gap-2 md:gap-3 shrink-0">
+            <SomaLogo className="w-16 md:w-24 text-white shrink-0" />
+            {environmentLabel && (
+              <span className="text-[10px] md:text-xs font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/40 shrink-0">
+                {environmentLabel}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2 md:gap-4 min-w-0">
             {activeUser.role !== 'kitchen' && (
               <span
-                className={`text-xs font-bold px-2.5 md:px-3 py-1 rounded-full border ${
+                className={`shrink-0 text-xs font-bold px-2.5 md:px-3 py-1 rounded-full border ${
                   printerConnected
                     ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
                     : 'bg-zinc-800 text-zinc-500 border-zinc-700'
@@ -141,13 +149,13 @@ function App() {
                 🖨️<span className="hidden sm:inline"> {printerConnected ? 'Lista' : 'Sin impresora'}</span>
               </span>
             )}
-            <div className="text-right">
-              <p className="text-zinc-200 font-bold text-sm leading-tight max-w-[40vw] truncate">{activeUser.name}</p>
+            <div className="text-right min-w-0">
+              <p className="text-zinc-200 font-bold text-sm leading-tight truncate">{activeUser.name}</p>
               <p className="text-zinc-500 text-[10px] md:text-xs uppercase font-medium">{activeUser.role}</p>
             </div>
             <button
               onClick={() => setIsPasswordOpen(true)}
-              className="w-10 h-10 flex items-center justify-center rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-colors"
+              className="shrink-0 w-10 h-10 flex items-center justify-center rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-colors"
               title="Cambiar mi contraseña"
               aria-label="Cambiar mi contraseña"
             >
@@ -155,7 +163,7 @@ function App() {
             </button>
             <button
               onClick={handleLogout}
-              className="w-10 h-10 flex items-center justify-center rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-colors"
+              className="shrink-0 w-10 h-10 flex items-center justify-center rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-colors"
               title="Cerrar Sesión"
             >
               🚪

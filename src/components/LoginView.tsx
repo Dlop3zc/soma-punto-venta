@@ -3,6 +3,7 @@ import {
   useAuthStore, authErrorMessage, validateUsername, validatePassword, MIN_PASSWORD_LENGTH,
 } from '../store/useAuthStore';
 import SomaLogo from './icons/SomaLogo';
+import { environmentLabel } from '../firebase';
 
 const inputClass =
   'w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition-colors';
@@ -21,8 +22,13 @@ export default function LoginView() {
   return (
     <div className="flex h-dvh w-full items-center justify-center bg-black bg-gradient-to-br from-zinc-900 to-black p-4 overflow-y-auto">
       <div className="bg-zinc-900 border border-zinc-800 rounded-3xl w-full max-w-md p-6 md:p-8 shadow-2xl flex flex-col items-center my-auto">
-        <div className="mb-6 md:mb-8">
+        <div className="mb-6 md:mb-8 flex flex-col items-center gap-3">
           <SomaLogo className="w-40 md:w-48 text-white" />
+          {environmentLabel && (
+            <span className="text-xs font-black uppercase tracking-wider px-3 py-1 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/40">
+              Base de {environmentLabel}
+            </span>
+          )}
         </div>
         {setupRequired ? <SetupForm /> : <LoginForm />}
       </div>
