@@ -103,17 +103,18 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // Orden de las categorías de la carta
+    // Orden de las categorías de la carta (público: lo usa el menú digital)
     match /config/menu {
-      allow read: if isActive();
+      allow read: if true;
       allow write: if isAdmin()
         && request.resource.data.categories is list
         && request.resource.data.categories.size() <= 100;
     }
 
     // ---------- Carta ----------
+    // El menú digital (/carta, sin sesión) solo ve los productos visibles
     match /products/{productId} {
-      allow read: if isActive();
+      allow read: if isActive() || resource.data.visible == true;
       allow delete: if isAdmin();
       allow create, update: if isAdmin() && validProduct(productId);
     }
@@ -149,8 +150,10 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // Público para que el menú digital marque lo agotado. Expone las existencias de cada
+    // producto; no hay datos de ventas ni de personal.
     match /inventory/{productId} {
-      allow read: if isActive();
+      allow read: if true;
       allow write: if isAdmin();
       allow update: if isStaff() && (
         // Meseros: descontar existencias (al enviar a cocina o al cobrar)

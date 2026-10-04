@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronDown, ChevronUp, Eye, EyeOff, Pencil, Plus, Search, Trash2, X, FolderCog } from 'lucide-react';
+import { ChevronDown, ChevronUp, Eye, EyeOff, Pencil, Plus, Search, Trash2, X, FolderCog, QrCode } from 'lucide-react';
 import { useMenuStore, validateProduct, MAX_NAME_LENGTH, type MenuProduct } from '../store/useMenuStore';
 
 const ALL = 'Todas';
@@ -45,7 +45,16 @@ export default function MenuEditorView() {
           <h1 className="page-title">
             <span>📋</span> Carta
           </h1>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
+            <a
+              href="/carta"
+              target="_blank"
+              rel="noopener"
+              title="La carta que ven los clientes, sin iniciar sesión. Pon esta dirección en el QR de las mesas."
+              className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold flex items-center gap-2"
+            >
+              <QrCode size={18} /> Menú digital
+            </a>
             <button
               onClick={() => setManagingCategories(true)}
               className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold flex items-center gap-2"
