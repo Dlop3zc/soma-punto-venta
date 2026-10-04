@@ -8,6 +8,7 @@ import type { Product } from '../data/mockProducts';
 import { useAuthStore } from './useAuthStore';
 import { useInventoryStore } from './useInventoryStore';
 import { getAvailability, reservedQuantity } from '../utils/stock';
+import { calcTotal, buildPaidOrder, splitItems, stockToConsume } from '../utils/orders';
 
 export interface CartItem extends Product {
   cartItemId: string;
@@ -87,11 +88,6 @@ interface CartState {
 
 const generateOrderId = () => Math.random().toString(36).substr(2, 9);
 
-const round2 = (n: number) => Math.round(n * 100) / 100;
-
-const calcTotal = (items: CartItem[]) =>
-  round2(items.reduce((sum, item) => sum + item.price * item.quantity, 0));
-
 // Firestore no acepta campos `undefined`; el round-trip JSON los elimina.
 const clean = <T,>(value: T): T => JSON.parse(JSON.stringify(value));
 
@@ -117,13 +113,7 @@ async function mutateOrder(
 // Descuenta del inventario las piezas de los productos con control de stock.
 function consumeStock(tx: Transaction, items: CartItem[]) {
   const { getRecord } = useInventoryStore.getState();
-  const byProduct: Record<string, number> = {};
-  items.forEach(item => {
-    if (getRecord(item.id).tracked) {
-      byProduct[item.id] = (byProduct[item.id] || 0) + item.quantity;
-    }
-  });
-  Object.entries(byProduct).forEach(([productId, qty]) => {
+  Object.entries(stockToConsume(items, id => getRecord(id).tracked)).forEach(([productId, qty]) => {
     tx.set(doc(db, 'inventory', productId), { stock: increment(-qty), updatedAt: Date.now() }, { merge: true });
   });
 }
@@ -300,22 +290,7 @@ export const useCartStore = create<CartState>((set, get) => ({
       if (!snap.exists()) throw new Error('La cuenta ya fue cobrada o eliminada.');
       const order = clean(snap.data() as Order);
 
-      const subtotal = calcTotal(order.items);
-      const discount = round2(Math.min(Math.max(0, payment.discount), subtotal));
-      const tip = round2(Math.max(0, payment.tip));
-
-      paid = clean<PaidOrder>({
-        ...order,
-        total: round2(subtotal - discount),
-        discount,
-        tip,
-        tipPercent: payment.tipPercent,
-        paymentMethod: payment.method,
-        paidAt: Date.now(),
-        paidBy: currentUserName(),
-        cashTendered: payment.method === 'Efectivo' ? payment.cashTendered : undefined,
-        change: payment.method === 'Efectivo' ? payment.change : undefined,
-      });
+      paid = clean(buildPaidOrder(order, payment, { paidAt: Date.now(), paidBy: currentUserName() }));
 
       // Lo que nunca pasó por cocina (p. ej. bebidas servidas directo) se descuenta al cobrar
       consumeStock(tx, order.items.filter(i => i.status === 'nuevo'));
@@ -336,21 +311,11 @@ export const useCartStore = create<CartState>((set, get) => ({
       const snap = await tx.get(ref);
       if (!snap.exists()) throw new Error('La cuenta ya no existe.');
       const originalOrder = clean(snap.data() as Order);
-      const newItems: CartItem[] = [];
-
-      itemsToMove.forEach(moveRequest => {
-        const item = originalOrder.items.find(i => i.cartItemId === moveRequest.id);
-        if (!item) return;
-        const quantityToMove = Math.min(item.quantity, moveRequest.quantity);
-        if (quantityToMove > 0) {
-          newItems.push({ ...item, cartItemId: generateOrderId(), quantity: quantityToMove });
-          item.quantity -= quantityToMove;
-        }
-      });
+      const { remaining, moved: newItems } = splitItems(originalOrder.items, itemsToMove, generateOrderId);
 
       if (newItems.length === 0) return;
 
-      originalOrder.items = originalOrder.items.filter(item => item.quantity > 0);
+      originalOrder.items = remaining;
 
       if (originalOrder.items.length === 0) {
         tx.delete(ref);

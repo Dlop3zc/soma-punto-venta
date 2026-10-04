@@ -22,6 +22,28 @@ npm run dev:emulators  # terminal 2: la app conectada a los emuladores
 
 La primera vez la app muestra **Configuración inicial** para crear el administrador.
 
+### Pruebas automatizadas
+
+```bash
+npm test             # pruebas unitarias (Vitest): cobro, propinas, cuentas, inventario, analítica, tickets
+npm run test:watch   # las vuelve a correr al guardar cambios
+```
+
+Las pruebas viven junto al código (`src/**/*.test.ts`) y usan datos de ejemplo de
+`src/test/fixtures.ts`. Prueban funciones sin Firebase ni pantallas, así que corren en
+menos de un segundo. Para agregar una, crea `algo.test.ts` junto al archivo que pruebas:
+
+```ts
+import { test, expect } from 'vitest';
+import { computeCheckout } from './checkout';
+
+test('propina del 15% con tarjeta', () => {
+  const r = computeCheckout({ subtotal: 290, method: 'Tarjeta', discountInput: '', tipPercent: 15,
+    customPercent: '', cashTipInput: '', tenderedInput: '' });
+  expect(r.tip).toBe(43.5);
+});
+```
+
 ### Pruebas de las reglas de seguridad
 
 ```bash

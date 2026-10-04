@@ -2,18 +2,15 @@ import { useState, type ReactNode } from 'react';
 import { X, Printer, CheckCircle2 } from 'lucide-react';
 import { useCartStore, type PaidOrder, type PaymentMethod } from '../store/useCartStore';
 import { usePrinterStore, TIP_PERCENTAGES } from '../store/usePrinterStore';
+import { computeCheckout, quickCashAmounts } from '../utils/checkout';
+import { round2 } from '../utils/orders';
 
 interface CheckoutModalProps {
   orderId: string;
   onClose: () => void;
 }
 
-const round2 = (n: number) => Math.round(n * 100) / 100;
 const money = (n: number) => `$${n.toFixed(2)}`;
-const parse = (v: string) => {
-  const n = parseFloat(v);
-  return Number.isFinite(n) && n > 0 ? n : 0;
-};
 
 // Se monta solo cuando hay una cuenta por cobrar, así el estado empieza limpio cada vez.
 export default function CheckoutModal({ orderId, onClose }: CheckoutModalProps) {
@@ -36,22 +33,13 @@ export default function CheckoutModal({ orderId, onClose }: CheckoutModalProps) 
   const order = orders.find(o => o.id === orderId);
 
   const subtotal = order?.total || 0;
-  const discount = round2(Math.min(parse(discountInput), subtotal));
-  const total = round2(subtotal - discount);
-
-  const effectivePercent = customPercent !== '' ? parse(customPercent) : tipPercent;
-  const tip = method === 'Tarjeta'
-    ? round2(total * effectivePercent / 100)
-    : round2(parse(cashTipInput));
-  const grandTotal = round2(total + tip);
-
-  const tendered = parse(cashTendered);
-  const change = round2(tendered - grandTotal);
-  const cashValid = tendered >= grandTotal;
+  const {
+    discount, discountExceeds, total, tipPercent: effectivePercent, tip, grandTotal, tendered, change, cashValid,
+  } = computeCheckout({
+    subtotal, method, discountInput, tipPercent, customPercent, cashTipInput, tenderedInput: cashTendered,
+  });
   const canPay = !paying && (method === 'Tarjeta' || cashValid);
-
-  const quickCash = [grandTotal, Math.ceil(grandTotal / 50) * 50, Math.ceil(grandTotal / 100) * 100, Math.ceil(grandTotal / 500) * 500]
-    .filter((v, i, a) => v > 0 && a.indexOf(v) === i);
+  const quickCash = quickCashAmounts(grandTotal);
 
   const doPrint = async (paid: PaidOrder, reprint = false) => {
     setPrintStatus('printing');
@@ -172,7 +160,7 @@ export default function CheckoutModal({ orderId, onClose }: CheckoutModalProps) 
               placeholder="0.00"
               className="w-full bg-zinc-800 border-2 border-zinc-700 text-white text-xl font-bold rounded-xl py-3 px-4 focus:outline-none focus:border-emerald-500"
             />
-            {parse(discountInput) > subtotal && (
+            {discountExceeds && (
               <p className="text-amber-400 text-sm mt-1">El descuento no puede ser mayor al total; se aplicará {money(subtotal)}.</p>
             )}
           </div>
