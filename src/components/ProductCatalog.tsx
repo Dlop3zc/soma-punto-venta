@@ -64,7 +64,7 @@ export default function ProductCatalog() {
       <div className="flex-1 overflow-y-auto -mr-1 pr-1 pb-24 md:pb-2">
         {filteredProducts.length === 0 && (
           <div className="h-full flex items-center justify-center text-center text-zinc-500 text-xl px-4">
-            {loaded ? 'No hay productos en la carta. El administrador puede agregarlos en "Carta".' : 'Cargando carta…'}
+            {loaded ? 'No hay productos en la carta. Se agregan desde la carta digital (DLX).' : 'Cargando carta…'}
           </div>
         )}
         <div className="grid gap-2.5 md:gap-4 grid-cols-[repeat(auto-fill,minmax(140px,1fr))] md:grid-cols-[repeat(auto-fill,minmax(165px,1fr))] xl:grid-cols-[repeat(auto-fill,minmax(190px,1fr))]">

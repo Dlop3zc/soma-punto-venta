@@ -9,7 +9,6 @@ import AnalyticsView from './components/AnalyticsView';
 import LoginView from './components/LoginView';
 import AdminUsersView from './components/AdminUsersView';
 import InventoryView from './components/InventoryView';
-import MenuEditorView from './components/MenuEditorView';
 import { useMenuStore } from './store/useMenuStore';
 import PrinterSettingsView from './components/PrinterSettingsView';
 import ChangePasswordModal from './components/ChangePasswordModal';
@@ -20,7 +19,7 @@ import { usePrinterStore, printingEnabled } from './store/usePrinterStore';
 import SomaLogo from './components/icons/SomaLogo';
 import { environmentLabel } from './firebase';
 
-type View = 'pos' | 'kitchen' | 'checkout' | 'dashboard' | 'users' | 'inventory' | 'menu' | 'printer';
+type View = 'pos' | 'kitchen' | 'checkout' | 'dashboard' | 'users' | 'inventory' | 'printer';
 
 interface NavItem {
   key: View | 'corte';
@@ -37,7 +36,6 @@ const ALL_NAV_ITEMS: NavItem[] = [
   { key: 'checkout', icon: '💰', label: 'Caja', roles: ['admin', 'waiter'], activeClass: 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20' },
   { key: 'dashboard', icon: '📈', label: 'Analítica', roles: ['admin'], activeClass: 'bg-purple-600 text-white shadow-lg shadow-purple-600/20' },
   { key: 'inventory', icon: '📦', label: 'Inventario', roles: ['admin'], activeClass: 'bg-amber-600 text-white shadow-lg shadow-amber-600/20' },
-  { key: 'menu', icon: '📋', label: 'Carta', roles: ['admin'], activeClass: 'bg-teal-600 text-white shadow-lg shadow-teal-600/20' },
   { key: 'users', icon: '👥', label: 'Usuarios', roles: ['admin'], activeClass: 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' },
   { key: 'printer', icon: '🖨️', label: 'Impresora', roles: ['admin'], activeClass: 'bg-slate-600 text-white shadow-lg shadow-slate-600/20' },
   { key: 'corte', icon: '✂️', label: 'Corte', roles: ['admin'], activeClass: '' },
@@ -97,19 +95,12 @@ function App() {
     };
   }, [sessionUid, sessionRole, initUsersListener]);
 
-  // Sistema nuevo: el primer administrador importa la carta original
-  const menuEmpty = useMenuStore(s => s.loaded && s.products.length === 0 && s.categories.length === 0);
-  useEffect(() => {
-    if (!menuEmpty || sessionRole !== 'admin') return;
-    useMenuStore.getState().seedDefaultMenu().catch(e => console.error('No se pudo importar la carta:', e));
-  }, [menuEmpty, sessionRole]);
-
   // Enforce role access on view change
   useEffect(() => {
     if (activeUser) {
       if (activeUser.role === 'kitchen' && activeView !== 'kitchen') {
         setActiveView('kitchen');
-      } else if (activeUser.role === 'waiter' && ['dashboard', 'users', 'inventory', 'menu', 'printer'].includes(activeView)) {
+      } else if (activeUser.role === 'waiter' && ['dashboard', 'users', 'inventory', 'printer'].includes(activeView)) {
         setActiveView('pos');
       }
     }
@@ -209,8 +200,6 @@ function App() {
           <AdminUsersView />
         ) : activeView === 'inventory' && activeUser.role === 'admin' ? (
           <InventoryView />
-        ) : activeView === 'menu' && activeUser.role === 'admin' ? (
-          <MenuEditorView />
         ) : activeView === 'printer' && activeUser.role === 'admin' && printingEnabled ? (
           <PrinterSettingsView />
         ) : activeUser.role !== 'kitchen' ? (
