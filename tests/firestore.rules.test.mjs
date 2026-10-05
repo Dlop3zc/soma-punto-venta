@@ -45,6 +45,8 @@ beforeEach(async () => {
     await setDoc(doc(db, 'products/cag-1'), { id: 'cag-1', name: 'Corona', price: 85, category: 'Caguama', visible: true, position: 0 });
     await setDoc(doc(db, 'products/oculto'), { id: 'oculto', name: 'Oculto', price: 1, category: 'Caguama', visible: false, position: 1 });
     await setDoc(doc(db, 'config/menu'), { categories: ['Caguama'] });
+    await setDoc(doc(db, 'menuEditors/dlx1'), { active: true });
+    await setDoc(doc(db, 'menuEditors/dlxInactivo'), { active: false });
     await setDoc(doc(db, 'alerts/a1'), { id: 'a1', read: false, message: 'lista' });
   });
 });
@@ -260,29 +262,49 @@ describe('operación del bar', () => {
     await assertSucceeds(setDoc(doc(db, 'inventory/cag-1'), { stock: 50, tracked: true, available: false }, { merge: true }));
   });
 
-  test('solo el admin edita la carta, y con datos válidos', async () => {
+  test('solo DLX (menuEditors) edita la carta, y con datos válidos', async () => {
     const product = (extra = {}) => ({
       id: 'p1', name: 'Margarita', price: 120, category: 'Coctelería', visible: true, position: 0, updatedAt: 1, ...extra,
     });
-    const admin = as('admin1');
-    await assertSucceeds(setDoc(doc(admin, 'products/p1'), product()));
-    await assertSucceeds(updateDoc(doc(admin, 'products/p1'), { price: 99.5, visible: false }));
-    await assertSucceeds(setDoc(doc(admin, 'config/menu'), { categories: ['Coctelería'], updatedAt: 1 }));
-    await assertFails(setDoc(doc(admin, 'products/p2'), product({ id: 'p2', price: -5 })));
-    await assertFails(setDoc(doc(admin, 'products/p3'), product({ id: 'otro' })));
-    await assertFails(setDoc(doc(admin, 'products/p4'), product({ id: 'p4', name: '' })));
-    await assertFails(setDoc(doc(admin, 'products/p5'), product({ id: 'p5', extra: 1 })));
+    const dlx = as('dlx1');
+    await assertSucceeds(getDoc(doc(dlx, 'menuEditors/dlx1')));
+    await assertSucceeds(setDoc(doc(dlx, 'products/p1'), product()));
+    await assertSucceeds(updateDoc(doc(dlx, 'products/p1'), { price: 99.5, visible: false }));
+    await assertSucceeds(getDoc(doc(dlx, 'products/p1'))); // oculto, pero el editor lo ve
+    await assertSucceeds(setDoc(doc(dlx, 'config/menu'), { categories: ['Coctelería'], updatedAt: 1 }));
+    await assertFails(setDoc(doc(dlx, 'products/p2'), product({ id: 'p2', price: -5 })));
+    await assertFails(setDoc(doc(dlx, 'products/p3'), product({ id: 'otro' })));
+    await assertFails(setDoc(doc(dlx, 'products/p4'), product({ id: 'p4', name: '' })));
+    await assertFails(setDoc(doc(dlx, 'products/p5'), product({ id: 'p5', extra: 1 })));
 
-    for (const uid of ['mesero1', 'cocina1']) {
+    // El personal de SOMA, incluido el admin, solo la lee
+    for (const uid of ['admin1', 'mesero1', 'cocina1']) {
       const db = as(uid);
       await assertSucceeds(getDoc(doc(db, 'products/p1')));
       await assertSucceeds(getDoc(doc(db, 'config/menu')));
+      await assertFails(setDoc(doc(db, 'products/p9'), product({ id: 'p9' })));
       await assertFails(updateDoc(doc(db, 'products/p1'), { price: 1 }));
       await assertFails(deleteDoc(doc(db, 'products/p1')));
       await assertFails(setDoc(doc(db, 'config/menu'), { categories: [] }));
     }
+    // Un editor desactivado, o cualquier otra cuenta, no edita
+    for (const uid of ['dlxInactivo', 'desconocido']) {
+      await assertFails(updateDoc(doc(as(uid), 'products/p1'), { price: 1 }));
+    }
     await assertFails(getDoc(doc(anon(), 'products/p1')));
-    await assertSucceeds(deleteDoc(doc(admin, 'products/p1')));
+    await assertSucceeds(deleteDoc(doc(dlx, 'products/p1')));
+  });
+
+  test('DLX no ve ni toca nada del punto de venta', async () => {
+    const dlx = as('dlx1');
+    await assertFails(getDoc(doc(dlx, 'orders/o1')));
+    await assertFails(getDocs(collection(dlx, 'paidOrders')));
+    await assertFails(getDocs(collection(dlx, 'users')));
+    await assertFails(getDocs(collection(dlx, 'cashCuts')));
+    await assertFails(setDoc(doc(dlx, 'inventory/cag-1'), { stock: 99 }, { merge: true }));
+    await assertFails(getDoc(doc(dlx, 'menuEditors/dlxInactivo')));
+    await assertFails(setDoc(doc(dlx, 'menuEditors/dlx1'), { active: true }));
+    await assertFails(setDoc(doc(as('admin1'), 'menuEditors/nuevo'), { active: true }));
   });
 
   test('colecciones desconocidas están cerradas', async () => {

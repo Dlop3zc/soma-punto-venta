@@ -81,7 +81,7 @@ Hay dos ambientes, cada uno con **su propio proyecto de Firebase** (base de dato
 6. **Publicar.** Corre `npm run deploy:prod`.
    - Si dice que no encuentra el sitio de Hosting, ve en la consola a **Hosting** → *Comenzar* (avanza sin ejecutar los comandos que muestra) y repite.
 7. **Configuración inicial.** Abre `https://<id>.web.app`, crea el **administrador** (aparece "Configuración inicial") y da de alta al personal en **Usuarios**.
-   - La carta se importa sola.
+   - La carta la da de alta DLX desde [carta-dlx](https://github.com/Dlop3zc/carta-dlx) (`/admin` → *Importar carta inicial*).
    - El inventario empieza vacío.
 8. **Guardar la configuración.** Sube `.env.produccion` y `.firebaserc` a git.
    - Estos valores no son secretos: lo que protege los datos son Authentication y las reglas.
@@ -179,19 +179,17 @@ En iPad/iPhone no se puede usar una impresora USB.
 
 ## Carta (productos y precios)
 
-- **Dónde vive la carta:** en Firestore. Los productos están en `products` y el orden de las categorías en `config/menu`. El admin la edita desde la pantalla **Carta**:
-  - Agregar, editar o borrar productos.
-  - Ocultarlos sin borrarlos.
-  - Ordenarlos.
-  - Administrar las categorías.
-- **Primera vez:** la primera vez que un admin entra, se importa sola la carta original (`src/data/defaultMenu.ts`). Ese archivo ya no se usa después.
+- **Dónde vive la carta:** en Firestore. Los productos están en `products` y el orden de las categorías en `config/menu`.
+- **Quién la edita:** DLX, desde el editor de la carta digital ([carta-dlx](https://github.com/Dlop3zc/carta-dlx), en `/admin`). El punto de venta solo la lee para vender; ya no tiene pantalla Carta.
 - **Cambios de precio:** solo aplican a lo que se pida después. Las cuentas abiertas y las ventas pasadas conservan el precio con que se pidió.
-- **Borrar un producto** también borra su registro de inventario. Las ventas anteriores no se pierden.
-- **Después de actualizar,** despliega las reglas *antes* de entrar como admin: `npm run deploy:rules`. Sin ellas, la importación inicial falla.
+- **Inventario:** se sigue llevando aquí. Un producto nuevo aparece en Inventario en cuanto DLX lo da de alta.
 
 ## Carta digital (DLX)
 
-La carta para los clientes (QR en las mesas) es una app aparte, en [`carta-dlx/`](carta-dlx/README.md), que administra DLX.
-No vive en el punto de venta, pero lee de esta base sin iniciar sesión los productos visibles, el orden de las
-categorías y el inventario para marcar lo agotado. Por eso `firestore.rules` deja leer esas tres cosas sin sesión
-(incluye las existencias; nada de ventas, cuentas ni personal). Si se cambian esas reglas, la carta deja de cargar.
+La carta para los clientes (QR en las mesas) y su editor son una app aparte, en [Dlop3zc/carta-dlx](https://github.com/Dlop3zc/carta-dlx), que administra DLX.
+Usa esta misma base:
+
+- Sin sesión lee los productos visibles, el orden de las categorías y el inventario para marcar lo agotado (incluye las existencias; nada de ventas, cuentas ni personal).
+- Las cuentas de DLX registradas en `menuEditors/{uid}` (se dan de alta en la consola; ver el README de carta-dlx) escriben `products` y `config/menu`. No tienen perfil en `users`, así que no entran al punto de venta.
+
+Si se cambian esas reglas, la carta deja de cargar o de guardar.
