@@ -44,6 +44,14 @@ service cloud.firestore {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
     }
 
+    // Cuenta de DLX que edita la carta desde carta-dlx/ (/admin). Se registra a mano en
+    // `menuEditors/{uid}` desde la consola; no tiene perfil en `users`, así que no entra al
+    // punto de venta ni ve sus datos.
+    function isMenuEditor() {
+      let path = /databases/$(database)/documents/menuEditors/$(request.auth.uid);
+      return signedIn() && exists(path) && get(path).data.active == true;
+    }
+
     function setupDone() {
       return exists(/databases/$(database)/documents/config/setup);
     }
@@ -104,19 +112,21 @@ service cloud.firestore {
     }
 
     // Orden de las categorías de la carta (público: lo lee la carta digital de DLX, carta-dlx/)
+    // Solo DLX la edita (carta-dlx/)
     match /config/menu {
       allow read: if true;
-      allow write: if isAdmin()
+      allow write: if isMenuEditor()
         && request.resource.data.categories is list
         && request.resource.data.categories.size() <= 100;
     }
 
     // ---------- Carta ----------
     // La carta digital (carta-dlx/, sin sesión) solo ve los productos visibles
+    // Los productos los da de alta DLX desde carta-dlx/; el punto de venta solo los lee para vender.
     match /products/{productId} {
-      allow read: if isActive() || resource.data.visible == true;
-      allow delete: if isAdmin();
-      allow create, update: if isAdmin() && validProduct(productId);
+      allow read: if isActive() || isMenuEditor() || resource.data.visible == true;
+      allow delete: if isMenuEditor();
+      allow create, update: if isMenuEditor() && validProduct(productId);
     }
 
     function validProduct(productId) {
@@ -187,6 +197,12 @@ service cloud.firestore {
         && request.resource.data.restocked is bool
         && request.resource.data.productId is string
         && request.resource.data.cancelledBy == profile().name;
+    }
+
+    // Editores de la carta (DLX): cada uno puede saber si está registrado; nadie los escribe
+    // desde una app, se dan de alta en la consola de Firebase
+    match /menuEditors/{uid} {
+      allow get: if signedIn() && request.auth.uid == uid;
     }
 
     // Cortes de caja: solo el admin; un corte cerrado no se modifica
