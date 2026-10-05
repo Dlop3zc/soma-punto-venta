@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronDown, ChevronUp, Eye, EyeOff, Pencil, Plus, Search, Trash2, X, FolderCog } from 'lucide-react';
-import { useMenuStore, validateProduct, MAX_NAME_LENGTH, type MenuProduct } from '../store/useMenuStore';
+import { ChevronDown, ChevronUp, Eye, EyeOff, Pencil, Plus, Search, Trash2, X, FolderCog, ExternalLink, LogOut } from 'lucide-react';
+import { useMenuStore, validateProduct, MAX_NAME_LENGTH, type MenuProduct } from './useMenuStore';
 
 const ALL = 'Todas';
 
@@ -11,8 +11,9 @@ function parsePrice(value: string): number {
   return clean === '' ? NaN : Number(clean);
 }
 
-export default function MenuEditorView() {
-  const { products, categories, loaded, setVisible, moveProduct } = useMenuStore();
+export default function MenuEditorView({ userEmail, onLogout }: { userEmail: string; onLogout: () => void }) {
+  const { products, categories, loaded, setVisible, moveProduct, seedDefaultMenu } = useMenuStore();
+  const [importing, setImporting] = useState(false);
   const [category, setCategory] = useState(ALL);
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState<MenuProduct | 'new' | null>(null);
@@ -39,13 +40,21 @@ export default function MenuEditorView() {
   const hiddenCount = products.filter(p => !p.visible).length;
 
   return (
-    <div className="flex-1 h-full bg-zinc-900 flex flex-col overflow-hidden">
+    <div className="h-[100dvh] bg-zinc-900 flex flex-col overflow-hidden">
       <div className="page-header flex flex-col gap-4">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <h1 className="page-title">
             <span>📋</span> Carta
           </h1>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
+            <a
+              href="/"
+              target="_blank"
+              rel="noopener"
+              className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold flex items-center gap-2"
+            >
+              <ExternalLink size={18} /> Ver carta
+            </a>
             <button
               onClick={() => setManagingCategories(true)}
               className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold flex items-center gap-2"
@@ -83,12 +92,27 @@ export default function MenuEditorView() {
             {products.length} productos{hiddenCount > 0 && ` · ${hiddenCount} oculto${hiddenCount === 1 ? '' : 's'}`}
           </span>
         </div>
+        <p className="text-zinc-500 text-sm">
+          Los cambios se ven al momento en la carta y en el punto de venta de SOMA. Las existencias y lo agotado se manejan en el Inventario de SOMA.
+          {' '}<span className="whitespace-nowrap">{userEmail} · <button onClick={onLogout} className="inline-flex items-center gap-1 text-zinc-300 hover:text-white font-medium"><LogOut size={14} /> Salir</button></span>
+        </p>
         {error && <p className="text-red-400 font-medium">{error}</p>}
       </div>
 
       <div className="flex-1 overflow-y-auto p-3 md:p-6 space-y-6">
         {!loaded ? (
           <p className="text-zinc-500 text-center py-12">Cargando carta…</p>
+        ) : products.length === 0 && categories.length === 0 ? (
+          <div className="text-center py-12 space-y-4">
+            <p className="text-zinc-500">La carta está vacía. Agrega tu primer producto o importa la carta original de Terraza SOMA.</p>
+            <button
+              onClick={() => { setImporting(true); run(seedDefaultMenu().then(() => undefined)).finally(() => setImporting(false)); }}
+              disabled={importing}
+              className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold disabled:opacity-50"
+            >
+              {importing ? 'Importando…' : 'Importar carta inicial'}
+            </button>
+          </div>
         ) : groups.length === 0 ? (
           <p className="text-zinc-500 text-center py-12">
             {query ? 'Ningún producto coincide con la búsqueda.' : 'La carta está vacía. Agrega tu primer producto.'}
@@ -263,7 +287,7 @@ function ProductModal({ product, defaultCategory, onClose }: {
             <input type="checkbox" checked={visible} onChange={e => setVisible(e.target.checked)} className="w-5 h-5 accent-blue-500" />
             <span>
               <span className="block text-zinc-100 font-bold">Visible en la carta</span>
-              <span className="block text-zinc-400 text-sm">Si lo desmarcas, los meseros no lo ven, pero se conserva para volver a activarlo.</span>
+              <span className="block text-zinc-400 text-sm">Si lo desmarcas, no aparece en la carta ni en el punto de venta, pero se conserva para volver a activarlo.</span>
             </span>
           </label>
 
