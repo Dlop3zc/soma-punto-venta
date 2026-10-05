@@ -103,7 +103,7 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // Orden de las categorías de la carta (público: lo usa el menú digital)
+    // Orden de las categorías de la carta (público: lo lee la carta digital de DLX, carta-dlx/)
     match /config/menu {
       allow read: if true;
       allow write: if isAdmin()
@@ -112,7 +112,7 @@ service cloud.firestore {
     }
 
     // ---------- Carta ----------
-    // El menú digital (/carta, sin sesión) solo ve los productos visibles
+    // La carta digital (carta-dlx/, sin sesión) solo ve los productos visibles
     match /products/{productId} {
       allow read: if isActive() || resource.data.visible == true;
       allow delete: if isAdmin();
@@ -150,7 +150,7 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // Público para que el menú digital marque lo agotado. Expone las existencias de cada
+    // Público para que la carta digital (carta-dlx/) marque lo agotado. Expone las existencias de cada
     // producto; no hay datos de ventas ni de personal.
     match /inventory/{productId} {
       allow read: if true;

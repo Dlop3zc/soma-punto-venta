@@ -74,9 +74,6 @@ export default defineConfig(({ command, mode }) => {
           // Solo la app (HTML/JS/CSS/íconos). Los datos siempre vienen de Firebase.
           globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
           navigateFallback: '/index.html',
-          // El menú digital siempre se pide a la red: un equipo con una versión vieja guardada
-          // abriría el punto de venta (inicio de sesión) en lugar de la carta
-          navigateFallbackDenylist: [/^\/carta\/?$/],
           maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
           cleanupOutdatedCaches: true,
           // Que la primera versión instalada controle la página; si no, "Actualizar" no recarga
