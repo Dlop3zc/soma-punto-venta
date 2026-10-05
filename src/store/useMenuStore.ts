@@ -4,7 +4,7 @@ import { collection, doc, onSnapshot } from 'firebase/firestore';
 import type { Product } from '../data/defaultMenu';
 
 // Producto de la carta en `products/{id}`. La carta (productos, precios, categorías y su
-// orden) la administra DLX desde carta-dlx/; el punto de venta solo la lee para vender.
+// orden) la administra DLX desde carta-dlx; el punto de venta solo la lee para vender.
 export interface MenuProduct extends Product {
   visible: boolean;  // aparece en la carta para los meseros
   position: number;  // orden dentro de su categoría
