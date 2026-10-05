@@ -1,0 +1,30 @@
+{
+  "name": "carta-dlx",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host --mode pruebas",
+    "build": "tsc -b && vite build --mode produccion",
+    "build:pruebas": "tsc -b && vite build --mode pruebas",
+    "preview": "vite preview",
+    "deploy": "npm run build && firebase deploy --only hosting"
+  },
+  "dependencies": {
+    "firebase": "^12.19.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "@types/node": "^24.13.3",
+    "@vitejs/plugin-react": "^6.1.1",
+    "autoprefixer": "^10.6.1",
+    "firebase-tools": "^15.32.1",
+    "postcss": "^8.5.28",
+    "tailwindcss": "^3.4.19",
+    "typescript": "~6.0.2",
+    "vite": "^8.3.0"
+  }
+}

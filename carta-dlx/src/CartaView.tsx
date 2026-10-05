@@ -1,22 +1,36 @@
 import { useEffect, useMemo, useState } from 'react';
 import { collection, doc, onSnapshot, query, where } from 'firebase/firestore';
-import { db } from '../firebase';
-import SomaLogo from './icons/SomaLogo';
-import type { MenuProduct } from '../store/useMenuStore';
-import { DEFAULT_INVENTORY, type InventoryRecord } from '../store/useInventoryStore';
-import { getAvailability } from '../utils/stock';
+import { db } from './firebase';
+import SomaLogo from './SomaLogo';
 
-// Menú digital para comensales (/carta): solo lectura y sin sesión. Las reglas de
-// Firestore dejan leer sin sesión los productos visibles, `config/menu` e `inventory`.
+// Carta digital para comensales: solo lectura y sin sesión, sobre la base de SOMA.
+// Las reglas de SOMA dejan leer sin sesión los productos visibles, `config/menu` e `inventory`.
+// Los campos de abajo son los que escribe el punto de venta; si allá cambian, cambiar aquí.
+
+interface MenuProduct {
+  id: string;
+  name: string;
+  price: number;
+  category: string;
+  position: number;
+}
+
+// `inventory/{idDelProducto}`. Sin documento = disponible y sin control de existencias.
+interface InventoryRecord {
+  tracked: boolean;   // se cuentan piezas
+  stock: number;
+  available: boolean; // interruptor manual "En carta"
+}
+
+const DEFAULT_INVENTORY: InventoryRecord = { tracked: false, stock: 0, available: true };
 
 const formatPrice = (n: number) =>
   n.toLocaleString('es-MX', { style: 'currency', currency: 'MXN', minimumFractionDigits: 0, maximumFractionDigits: 2 });
 
-// Sin sesión no se ven las cuentas abiertas, así que no se descuenta lo apartado en ellas
-const isSoldOut = (record: InventoryRecord) => {
-  const { status } = getAvailability(record, 0);
-  return status === 'out' || status === 'disabled';
-};
+// Igual que en el punto de venta (utils/stock.ts), sin descontar lo apartado en cuentas abiertas:
+// sin sesión no se pueden leer
+const isSoldOut = (record: InventoryRecord) =>
+  !record.available || (record.tracked && record.stock <= 0);
 
 export default function PublicMenuView() {
   const [products, setProducts] = useState<MenuProduct[] | null>(null);
@@ -26,7 +40,6 @@ export default function PublicMenuView() {
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
 
   useEffect(() => {
-    document.title = 'Carta · Terraza SOMA';
     const onError = (e: unknown) => {
       console.error('🔥 Error leyendo la carta pública:', e);
       setError(true);

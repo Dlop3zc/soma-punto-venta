@@ -189,11 +189,9 @@ En iPad/iPhone no se puede usar una impresora USB.
 - **Borrar un producto** también borra su registro de inventario. Las ventas anteriores no se pierden.
 - **Después de actualizar,** despliega las reglas *antes* de entrar como admin: `npm run deploy:rules`. Sin ellas, la importación inicial falla.
 
-## Menú digital (QR para los clientes)
+## Carta digital (DLX)
 
-- **Dirección:** `https://<id-del-proyecto>.web.app/carta` (en producción, `https://soma-pos.web.app/carta`). Es la que va en el QR de las mesas.
-- Se abre sin iniciar sesión, en el celular, y se actualiza sola.
-- Muestra los productos **visibles** de la Carta, con sus categorías en el mismo orden.
-- Marca como **Agotado** lo que en Inventario está sin existencias o desactivado.
-- El admin lo abre desde **Carta → Menú digital**.
-- Para que funcione hay que publicar las reglas (`npm run deploy:rules` / `deploy:rules:prod`): permiten leer sin sesión los productos visibles, el orden de las categorías y el inventario (incluye las existencias). Nada de ventas, cuentas ni personal.
+La carta para los clientes (QR en las mesas) es una app aparte, en [`carta-dlx/`](carta-dlx/README.md), que administra DLX.
+No vive en el punto de venta, pero lee de esta base sin iniciar sesión los productos visibles, el orden de las
+categorías y el inventario para marcar lo agotado. Por eso `firestore.rules` deja leer esas tres cosas sin sesión
+(incluye las existencias; nada de ventas, cuentas ni personal). Si se cambian esas reglas, la carta deja de cargar.
