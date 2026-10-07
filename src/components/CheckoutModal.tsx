@@ -14,6 +14,8 @@ const parse = (v: string) => {
   const n = parseFloat(v);
   return Number.isFinite(n) && n > 0 ? n : 0;
 };
+// 12.5 -> "12.5%", 10 -> "10%"
+const pct = (n: number) => `${round2(n)}%`;
 
 // Se monta solo cuando hay una cuenta por cobrar, así el estado empieza limpio cada vez.
 export default function CheckoutModal({ orderId, onClose }: CheckoutModalProps) {
@@ -24,7 +26,10 @@ export default function CheckoutModal({ orderId, onClose }: CheckoutModalProps) 
   const [method, setMethod] = useState<PaymentMethod>('Efectivo');
   // Tarjeta: propina por porcentaje. Efectivo: propina por monto.
   const [tipPercent, setTipPercent] = useState<number>(0);
-  const [customPercent, setCustomPercent] = useState('');
+  // "Otro": se puede escribir en porcentaje o en pesos y se muestra el equivalente.
+  const [customTip, setCustomTip] = useState(false);
+  const [customUnit, setCustomUnit] = useState<'%' | '$'>('%');
+  const [customValue, setCustomValue] = useState('');
   const [cashTipInput, setCashTipInput] = useState('');
   const [cashTendered, setCashTendered] = useState('');
   const [shouldPrint, setShouldPrint] = useState(settings.autoPrintOnPay);
@@ -38,10 +43,26 @@ export default function CheckoutModal({ orderId, onClose }: CheckoutModalProps) 
   // Ya no se capturan descuentos/promociones al cobrar; las ventas pasadas conservan el suyo.
   const total = order?.total || 0;
 
-  const effectivePercent = customPercent !== '' ? parse(customPercent) : tipPercent;
+  const customAmount = customUnit === '$'
+    ? round2(parse(customValue))
+    : round2(total * parse(customValue) / 100);
+  const customPercent = customUnit === '$'
+    ? (total > 0 ? round2(customAmount / total * 100) : 0)
+    : parse(customValue);
+  const effectivePercent = customTip ? customPercent : tipPercent;
   const tip = method === 'Tarjeta'
-    ? round2(total * effectivePercent / 100)
+    ? (customTip ? customAmount : round2(total * tipPercent / 100))
     : round2(parse(cashTipInput));
+  const cashTipPercent = total > 0 ? round2(tip / total * 100) : 0;
+
+  // Al cambiar entre % y $ se conserva la misma propina, convertida a la otra unidad.
+  const switchCustomUnit = (unit: '%' | '$') => {
+    if (unit === customUnit) return;
+    if (customValue !== '') {
+      setCustomValue(String(unit === '$' ? customAmount : customPercent));
+    }
+    setCustomUnit(unit);
+  };
   const grandTotal = round2(total + tip);
 
   const tendered = parse(cashTendered);
@@ -67,7 +88,7 @@ export default function CheckoutModal({ orderId, onClose }: CheckoutModalProps) 
         method,
         discount: 0,
         tip,
-        tipPercent: method === 'Tarjeta' && effectivePercent > 0 ? effectivePercent : undefined,
+        tipPercent: method === 'Tarjeta' && effectivePercent > 0 ? round2(effectivePercent) : undefined,
         cashTendered: method === 'Efectivo' ? tendered : undefined,
         change: method === 'Efectivo' ? change : undefined,
       });
@@ -165,31 +186,57 @@ export default function CheckoutModal({ orderId, onClose }: CheckoutModalProps) 
               Propina {method === 'Tarjeta' ? '(porcentaje)' : '(monto en efectivo)'}
             </label>
             {method === 'Tarjeta' ? (
-              <div className="grid grid-cols-5 gap-2">
-                {[0, ...TIP_PERCENTAGES].map(p => (
+              <div className="space-y-2">
+                <div className="grid grid-cols-5 gap-2">
+                  {[0, ...TIP_PERCENTAGES].map(p => (
+                    <button
+                      key={p}
+                      onClick={() => { setTipPercent(p); setCustomTip(false); }}
+                      className={`py-3 rounded-xl font-bold transition-colors ${
+                        !customTip && tipPercent === p ? 'bg-blue-600 text-white' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+                      }`}
+                    >
+                      {p === 0 ? 'Sin' : `${p}%`}
+                    </button>
+                  ))}
                   <button
-                    key={p}
-                    onClick={() => { setTipPercent(p); setCustomPercent(''); }}
+                    onClick={() => setCustomTip(true)}
                     className={`py-3 rounded-xl font-bold transition-colors ${
-                      customPercent === '' && tipPercent === p ? 'bg-blue-600 text-white' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+                      customTip ? 'bg-blue-600 text-white' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
                     }`}
                   >
-                    {p === 0 ? 'Sin' : `${p}%`}
+                    Otro
                   </button>
-                ))}
-                <div className="relative">
-                  <input
-                    type="number"
-                    min={0}
-                    value={customPercent}
-                    onChange={(e) => setCustomPercent(e.target.value)}
-                    placeholder="Otro"
-                    className={`w-full h-full bg-zinc-800 border-2 text-white font-bold rounded-xl px-2 pr-6 text-center focus:outline-none ${
-                      customPercent !== '' ? 'border-blue-500' : 'border-zinc-700'
-                    }`}
-                  />
-                  <span className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 font-bold">%</span>
                 </div>
+                {customTip && (
+                  <div className="flex items-center gap-2">
+                    <div className="flex rounded-xl overflow-hidden border-2 border-zinc-700 shrink-0">
+                      {(['%', '$'] as const).map(u => (
+                        <button
+                          key={u}
+                          onClick={() => switchCustomUnit(u)}
+                          className={`w-12 py-2 text-lg font-bold transition-colors ${
+                            customUnit === u ? 'bg-blue-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                          }`}
+                        >
+                          {u}
+                        </button>
+                      ))}
+                    </div>
+                    <input
+                      type="number"
+                      min={0}
+                      autoFocus
+                      value={customValue}
+                      onChange={(e) => setCustomValue(e.target.value)}
+                      placeholder={customUnit === '%' ? 'Porcentaje' : 'Monto en pesos'}
+                      className="flex-1 min-w-0 bg-zinc-800 border-2 border-blue-500 text-white text-xl font-bold rounded-xl py-2 px-3 focus:outline-none"
+                    />
+                    <span className="text-zinc-400 font-bold whitespace-nowrap">
+                      = {customUnit === '%' ? money(customAmount) : pct(customPercent)}
+                    </span>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="space-y-2">
@@ -201,8 +248,13 @@ export default function CheckoutModal({ orderId, onClose }: CheckoutModalProps) 
                     value={cashTipInput}
                     onChange={(e) => setCashTipInput(e.target.value)}
                     placeholder="0.00"
-                    className="w-full bg-zinc-800 border-2 border-zinc-700 text-white text-xl font-bold rounded-xl py-3 pl-10 pr-4 focus:outline-none focus:border-emerald-500"
+                    className="w-full bg-zinc-800 border-2 border-zinc-700 text-white text-xl font-bold rounded-xl py-3 pl-10 pr-24 focus:outline-none focus:border-emerald-500"
                   />
+                  {tip > 0 && total > 0 && (
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-400 font-bold">
+                      = {pct(cashTipPercent)}
+                    </span>
+                  )}
                 </div>
                 <div className="flex gap-2 flex-wrap">
                   {TIP_PERCENTAGES.map(p => {
@@ -265,7 +317,7 @@ export default function CheckoutModal({ orderId, onClose }: CheckoutModalProps) 
           <div className="bg-zinc-950 rounded-2xl border border-zinc-800 p-4 md:p-6 space-y-2 md:space-y-3 text-base md:text-lg">
             <Row label="Total venta" value={money(total)} className="text-white font-bold" />
             <Row
-              label={method === 'Tarjeta' && effectivePercent > 0 ? `Propina (${effectivePercent}%)` : 'Propina'}
+              label={method === 'Tarjeta' && effectivePercent > 0 ? `Propina (${pct(effectivePercent)})` : 'Propina'}
               value={money(tip)}
               className="text-sky-300"
             />
