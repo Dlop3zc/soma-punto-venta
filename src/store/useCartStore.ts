@@ -27,6 +27,7 @@ export interface Order {
   items: CartItem[];
   total: number;
   createdAt: number;
+  splitFrom?: string; // id de la cuenta de la que se separó; estas ya no se dividen en partes iguales
 }
 
 export type PaymentMethod = 'Efectivo' | 'Tarjeta';
@@ -90,6 +91,19 @@ interface CartState {
   sendToKitchen: (orderId: string) => Promise<void>;
   markAsReady: (orderId: string) => Promise<void>;
   dismissAlert: (alertId: string) => Promise<void>;
+}
+
+// Una cuenta separada (o que viene de una) ya no se puede volver a dividir en partes iguales.
+export const isSeparatedOrder = (order: Order) =>
+  !!order.splitFrom || order.name.endsWith('(Separada)');
+
+// Reparte `total` entre `people` en partes iguales. Los centavos que sobran se asignan a las
+// primeras personas para que la suma cuadre exacto con el total.
+export function splitEqually(total: number, people: number): number[] {
+  const cents = Math.round(total * 100);
+  const base = Math.floor(cents / people);
+  const extra = cents - base * people;
+  return Array.from({ length: people }, (_, i) => (base + (i < extra ? 1 : 0)) / 100);
 }
 
 const generateOrderId = () => Math.random().toString(36).substr(2, 9);
@@ -396,6 +410,7 @@ export const useCartStore = create<CartState>((set, get) => ({
         items: newItems,
         total: calcTotal(newItems),
         createdAt: Date.now(),
+        splitFrom: originalOrder.id,
       };
       tx.set(doc(db, 'orders', newOrderId), clean(newOrder));
     });

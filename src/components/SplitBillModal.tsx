@@ -1,6 +1,11 @@
 import { useState, useEffect } from 'react';
-import { useCartStore } from '../store/useCartStore';
-import { Minus, Plus, Scissors, X } from 'lucide-react';
+import { useCartStore, isSeparatedOrder, splitEqually } from '../store/useCartStore';
+import { Minus, Plus, Scissors, Users, X } from 'lucide-react';
+
+type SplitMode = 'productos' | 'iguales';
+
+const MIN_PEOPLE = 2;
+const MAX_PEOPLE = 30;
 
 interface SplitBillModalProps {
   isOpen: boolean;
@@ -12,6 +17,8 @@ export default function SplitBillModal({ isOpen, onClose }: SplitBillModalProps)
   
   // Track quantities to move: { productId: quantity }
   const [selections, setSelections] = useState<Record<string, number>>({});
+  const [mode, setMode] = useState<SplitMode>('productos');
+  const [people, setPeople] = useState(MIN_PEOPLE);
 
   const activeOrder = orders.find(o => o.id === activeOrderId);
 
@@ -19,6 +26,8 @@ export default function SplitBillModal({ isOpen, onClose }: SplitBillModalProps)
   useEffect(() => {
     if (isOpen) {
       setSelections({});
+      setMode('productos');
+      setPeople(MIN_PEOPLE);
     }
   }, [isOpen, activeOrderId]);
 
@@ -56,6 +65,10 @@ export default function SplitBillModal({ isOpen, onClose }: SplitBillModalProps)
   }, 0);
   const totalRemaining = activeOrder.total - totalToMove;
 
+  const canSplitEqually = !isSeparatedOrder(activeOrder);
+  const shares = splitEqually(activeOrder.total, people);
+  const sameShares = shares.every(s => s === shares[0]);
+
   const handleSplit = () => {
     if (isAnythingSelected) {
       splitOrder(activeOrder.id, itemsToMoveList);
@@ -83,6 +96,79 @@ export default function SplitBillModal({ isOpen, onClose }: SplitBillModalProps)
           </button>
         </div>
 
+        <div className="px-4 pt-4 md:px-6 bg-zinc-900 shrink-0">
+          <div className="grid grid-cols-2 gap-2 bg-zinc-950 p-1.5 rounded-xl">
+            {([['productos', 'Por productos'], ['iguales', 'Partes iguales']] as const).map(([value, label]) => (
+              <button
+                key={value}
+                onClick={() => setMode(value)}
+                className={`py-2.5 rounded-lg font-bold transition-colors ${
+                  mode === value ? 'bg-emerald-500 text-zinc-950' : 'text-zinc-400 hover:text-white'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {mode === 'iguales' ? (
+          <div className="p-4 md:p-6 bg-zinc-900 flex-1 min-h-0 overflow-y-auto">
+            {canSplitEqually ? (
+              <>
+                <p className="text-zinc-400 mb-6">
+                  Divide lo que queda en esta cuenta (<strong className="text-white">${activeOrder.total.toFixed(2)}</strong>) entre las personas de la mesa.
+                </p>
+
+                <div className="flex items-center justify-between p-4 rounded-2xl bg-zinc-950 border-2 border-zinc-800 mb-6">
+                  <div className="flex items-center gap-3 text-white">
+                    <Users size={24} className="text-emerald-400" />
+                    <span className="text-xl font-bold">Personas</span>
+                  </div>
+                  <div className="flex items-center gap-3 bg-zinc-800 p-1.5 rounded-xl">
+                    <button
+                      onClick={() => setPeople(p => Math.max(MIN_PEOPLE, p - 1))}
+                      disabled={people <= MIN_PEOPLE}
+                      className="p-2 bg-zinc-700 rounded-lg text-white hover:bg-zinc-600 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                    >
+                      <Minus size={20} />
+                    </button>
+                    <span className="w-8 text-center font-bold text-2xl text-white">{people}</span>
+                    <button
+                      onClick={() => setPeople(p => Math.min(MAX_PEOPLE, p + 1))}
+                      disabled={people >= MAX_PEOPLE}
+                      className="p-2 bg-zinc-700 rounded-lg text-white hover:bg-zinc-600 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                    >
+                      <Plus size={20} />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="text-center mb-6">
+                  <p className="text-zinc-400 text-lg font-medium">Cada persona paga</p>
+                  <p className="text-5xl md:text-6xl font-black text-emerald-400">${shares[0].toFixed(2)}</p>
+                  <p className="text-zinc-500 text-sm mt-1">Sin propina</p>
+                </div>
+
+                {!sameShares && (
+                  <ul className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {shares.map((share, i) => (
+                      <li key={i} className="flex justify-between px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-300">
+                        <span>Persona {i + 1}</span>
+                        <span className="font-bold text-white">${share.toFixed(2)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </>
+            ) : (
+              <p className="text-zinc-400 text-center py-10">
+                Esta cuenta ya se separó de otra, así que no se puede dividir en partes iguales.
+                Se cobra completa.
+              </p>
+            )}
+          </div>
+        ) : (
         <div className="p-4 md:p-6 bg-zinc-900 flex-1 min-h-0 overflow-y-auto">
           <p className="text-zinc-400 mb-6">
             Selecciona los productos que deseas mover a una <strong className="text-white">nueva cuenta separada</strong>.
@@ -147,8 +233,23 @@ export default function SplitBillModal({ isOpen, onClose }: SplitBillModalProps)
             })}
           </div>
         </div>
+        )}
 
         {/* Footer */}
+        {mode === 'iguales' ? (
+        <div className="p-4 md:p-6 bg-zinc-950 border-t border-zinc-800 flex items-center justify-between gap-3 shrink-0">
+          <div>
+            <p className="text-zinc-500 text-sm font-medium">Total de la cuenta:</p>
+            <p className="text-2xl font-bold text-zinc-300">${activeOrder.total.toFixed(2)}</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="px-8 py-4 rounded-xl font-black uppercase tracking-wider bg-zinc-800 hover:bg-zinc-700 text-white transition-all"
+          >
+            Listo
+          </button>
+        </div>
+        ) : (
         <div className="p-4 md:p-6 bg-zinc-950 border-t border-zinc-800 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shrink-0">
           <div>
             <p className="text-zinc-500 text-sm font-medium">Cuenta Original quedará en:</p>
@@ -167,6 +268,7 @@ export default function SplitBillModal({ isOpen, onClose }: SplitBillModalProps)
             <span>Crear Cuenta por ${totalToMove.toFixed(2)}</span>
           </button>
         </div>
+        )}
 
       </div>
     </div>
