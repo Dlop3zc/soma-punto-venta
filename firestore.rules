@@ -131,12 +131,14 @@ service cloud.firestore {
 
     function validProduct(productId) {
       let d = request.resource.data;
-      return d.keys().hasOnly(['id', 'name', 'price', 'category', 'visible', 'position', 'updatedAt'])
+      // enCarta (opcional): false = se vende en el punto de venta pero no sale en la carta digital
+      return d.keys().hasOnly(['id', 'name', 'price', 'category', 'visible', 'enCarta', 'position', 'updatedAt'])
         && d.id == productId
         && d.name is string && d.name.size() > 0 && d.name.size() <= 60
         && (d.price is int || d.price is float) && d.price >= 0
         && d.category is string && d.category.size() > 0 && d.category.size() <= 40
         && d.visible is bool
+        && (!('enCarta' in d) || d.enCarta is bool)
         && d.position is int;
     }
 
