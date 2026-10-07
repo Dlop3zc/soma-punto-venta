@@ -276,6 +276,10 @@ describe('operación del bar', () => {
     await assertFails(setDoc(doc(dlx, 'products/p3'), product({ id: 'otro' })));
     await assertFails(setDoc(doc(dlx, 'products/p4'), product({ id: 'p4', name: '' })));
     await assertFails(setDoc(doc(dlx, 'products/p5'), product({ id: 'p5', extra: 1 })));
+    // Quitarlo solo de la carta digital (sigue en el punto de venta)
+    await assertSucceeds(setDoc(doc(dlx, 'products/p6'), product({ id: 'p6', enCarta: false })));
+    await assertSucceeds(updateDoc(doc(dlx, 'products/p6'), { enCarta: true }));
+    await assertFails(updateDoc(doc(dlx, 'products/p6'), { enCarta: 'no' }));
 
     // El personal de SOMA, incluido el admin, solo la lee
     for (const uid of ['admin1', 'mesero1', 'cocina1']) {
