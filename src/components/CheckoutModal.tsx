@@ -22,7 +22,6 @@ export default function CheckoutModal({ orderId, onClose }: CheckoutModalProps) 
   const canPrint = usePrinterStore(selectCanPrint);
 
   const [method, setMethod] = useState<PaymentMethod>('Efectivo');
-  const [discountInput, setDiscountInput] = useState('');
   // Tarjeta: propina por porcentaje. Efectivo: propina por monto.
   const [tipPercent, setTipPercent] = useState<number>(0);
   const [customPercent, setCustomPercent] = useState('');
@@ -36,9 +35,8 @@ export default function CheckoutModal({ orderId, onClose }: CheckoutModalProps) 
 
   const order = orders.find(o => o.id === orderId);
 
-  const subtotal = order?.total || 0;
-  const discount = round2(Math.min(parse(discountInput), subtotal));
-  const total = round2(subtotal - discount);
+  // Ya no se capturan descuentos/promociones al cobrar; las ventas pasadas conservan el suyo.
+  const total = order?.total || 0;
 
   const effectivePercent = customPercent !== '' ? parse(customPercent) : tipPercent;
   const tip = method === 'Tarjeta'
@@ -67,7 +65,7 @@ export default function CheckoutModal({ orderId, onClose }: CheckoutModalProps) 
     try {
       const paid = await payOrder(order.id, {
         method,
-        discount,
+        discount: 0,
         tip,
         tipPercent: method === 'Tarjeta' && effectivePercent > 0 ? effectivePercent : undefined,
         cashTendered: method === 'Efectivo' ? tendered : undefined,
@@ -159,23 +157,6 @@ export default function CheckoutModal({ orderId, onClose }: CheckoutModalProps) 
                 {m.toUpperCase()}
               </button>
             ))}
-          </div>
-
-          {/* Descuento */}
-          <div>
-            <label className="block text-zinc-400 font-medium mb-2">Descuento / Promoción ($)</label>
-            <input
-              type="number"
-              min={0}
-              max={subtotal}
-              value={discountInput}
-              onChange={(e) => setDiscountInput(e.target.value)}
-              placeholder="0.00"
-              className="w-full bg-zinc-800 border-2 border-zinc-700 text-white text-xl font-bold rounded-xl py-3 px-4 focus:outline-none focus:border-emerald-500"
-            />
-            {parse(discountInput) > subtotal && (
-              <p className="text-amber-400 text-sm mt-1">El descuento no puede ser mayor al total; se aplicará {money(subtotal)}.</p>
-            )}
           </div>
 
           {/* Propina */}
@@ -282,8 +263,6 @@ export default function CheckoutModal({ orderId, onClose }: CheckoutModalProps) 
         {/* Resumen */}
         <div className="flex flex-col gap-4">
           <div className="bg-zinc-950 rounded-2xl border border-zinc-800 p-4 md:p-6 space-y-2 md:space-y-3 text-base md:text-lg">
-            <Row label="Subtotal" value={money(subtotal)} />
-            {discount > 0 && <Row label="Descuento" value={`-${money(discount)}`} className="text-amber-400" />}
             <Row label="Total venta" value={money(total)} className="text-white font-bold" />
             <Row
               label={method === 'Tarjeta' && effectivePercent > 0 ? `Propina (${effectivePercent}%)` : 'Propina'}
