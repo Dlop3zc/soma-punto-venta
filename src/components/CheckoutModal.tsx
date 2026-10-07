@@ -1,11 +1,13 @@
 import { useState, type ReactNode } from 'react';
 import { X, Printer, CheckCircle2 } from 'lucide-react';
-import { useCartStore, type PaidOrder, type PaymentMethod } from '../store/useCartStore';
+import { useCartStore, type PaidOrder, type PaymentInput, type PaymentMethod, type SplitShare } from '../store/useCartStore';
 import { usePrinterStore, selectCanPrint, printingEnabled, TIP_PERCENTAGES } from '../store/usePrinterStore';
 
 interface CheckoutModalProps {
   orderId: string;
   onClose: () => void;
+  // Cobro de una persona en una cuenta dividida en partes iguales
+  split?: SplitShare & { part: number };
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -16,8 +18,11 @@ const parse = (v: string) => {
 };
 
 // Se monta solo cuando hay una cuenta por cobrar, así el estado empieza limpio cada vez.
-export default function CheckoutModal({ orderId, onClose }: CheckoutModalProps) {
-  const { orders, payOrder } = useCartStore();
+export default function CheckoutModal({ orderId, onClose, split }: CheckoutModalProps) {
+  const { orders, payOrder, paySplitShare } = useCartStore();
+  const pay = split
+    ? (id: string, payment: PaymentInput) => paySplitShare(id, split, payment)
+    : payOrder;
   const { settings, printReceipt } = usePrinterStore();
   const canPrint = usePrinterStore(selectCanPrint);
 
@@ -33,7 +38,11 @@ export default function CheckoutModal({ orderId, onClose }: CheckoutModalProps) 
   const [paidOrder, setPaidOrder] = useState<PaidOrder | null>(null);
   const [printStatus, setPrintStatus] = useState<'idle' | 'printing' | 'ok' | 'failed'>('idle');
 
-  const order = orders.find(o => o.id === orderId);
+  const openOrder = orders.find(o => o.id === orderId);
+  // En partes iguales se cobra solo la parte de esta persona
+  const order = openOrder && split
+    ? { ...openOrder, name: `${openOrder.name} · Persona ${split.part} de ${split.people}`, total: split.amount }
+    : openOrder;
 
   // Ya no se capturan descuentos/promociones al cobrar; las ventas pasadas conservan el suyo.
   const total = order?.total || 0;
@@ -63,7 +72,7 @@ export default function CheckoutModal({ orderId, onClose }: CheckoutModalProps) 
     setPaying(true);
     setError(null);
     try {
-      const paid = await payOrder(order.id, {
+      const paid = await pay(order.id, {
         method,
         discount: 0,
         tip,
@@ -93,7 +102,7 @@ export default function CheckoutModal({ orderId, onClose }: CheckoutModalProps) 
   // ---------- Pantalla final ----------
   if (paidOrder) {
     return (
-      <Shell onClose={onClose} title={`${paidOrder.name} · Cobrada`}>
+      <Shell onClose={onClose} title={`${paidOrder.name}${paidOrder.splitPart ? ` · Persona ${paidOrder.splitPart} de ${paidOrder.splitOf}` : ''} · Cobrada`}>
         <div className="p-6 md:p-10 flex flex-col items-center text-center gap-5 md:gap-6 overflow-y-auto">
           <CheckCircle2 size={72} className="text-emerald-400" />
           {paidOrder.paymentMethod === 'Efectivo' ? (
