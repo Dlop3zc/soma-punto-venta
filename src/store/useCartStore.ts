@@ -27,6 +27,15 @@ export interface Order {
   items: CartItem[];
   total: number;
   createdAt: number;
+  splitFrom?: string; // id de la cuenta de la que se separó; estas ya no se dividen en partes iguales
+  equalSplit?: EqualSplit; // existe cuando ya pagó al menos una persona en partes iguales
+}
+
+// Cobro en partes iguales en curso: cada persona paga su parte con su método y su propina.
+export interface EqualSplit {
+  people: number;
+  paidCount: number;
+  paidAmount: number;
 }
 
 export type PaymentMethod = 'Efectivo' | 'Tarjeta';
@@ -40,6 +49,11 @@ export interface PaidOrder extends Order {
   discount?: number;
   tip?: number;        // propina, no forma parte de `total` (ventas)
   tipPercent?: number; // porcentaje elegido cuando la propina se calculó por %
+  // Pago de una persona en una cuenta dividida en partes iguales. Solo el último pago lleva
+  // los productos, para que no se cuenten varias veces en las estadísticas.
+  splitPart?: number;
+  splitOf?: number;
+  splitAccountTotal?: number;
 }
 
 export interface PaymentInput {
@@ -49,6 +63,12 @@ export interface PaymentInput {
   tipPercent?: number;
   cashTendered?: number;
   change?: number;
+}
+
+// La parte que se va a cobrar: entre cuántas personas y el monto que vio el cajero.
+export interface SplitShare {
+  people: number;
+  amount: number;
 }
 
 export interface Alert {
@@ -86,10 +106,34 @@ interface CartState {
   setItemNote: (cartItemId: string, note: string) => Promise<void>;
   cancelSentItem: (orderId: string, cartItemId: string, input: CancelItemInput) => Promise<void>;
   payOrder: (orderId: string, payment: PaymentInput) => Promise<PaidOrder | null>;
+  paySplitShare: (orderId: string, share: SplitShare, payment: PaymentInput) => Promise<PaidOrder | null>;
+  setSplitPeople: (orderId: string, people: number) => Promise<void>;
   splitOrder: (originalOrderId: string, itemsToMove: { id: string, quantity: number }[]) => Promise<void>;
   sendToKitchen: (orderId: string) => Promise<void>;
   markAsReady: (orderId: string) => Promise<void>;
   dismissAlert: (alertId: string) => Promise<void>;
+}
+
+// Una cuenta separada (o que viene de una) ya no se puede volver a dividir en partes iguales.
+export const isSeparatedOrder = (order: Order) =>
+  !!order.splitFrom || order.name.endsWith('(Separada)');
+
+// Reparte `total` entre `people` en partes iguales. Los centavos que sobran se asignan a las
+// primeras personas para que la suma cuadre exacto con el total.
+export function splitEqually(total: number, people: number): number[] {
+  const cents = Math.round(total * 100);
+  const base = Math.floor(cents / people);
+  const extra = cents - base * people;
+  return Array.from({ length: people }, (_, i) => (base + (i < extra ? 1 : 0)) / 100);
+}
+
+// Lo que le toca a la siguiente persona: lo que falta, entre las que faltan por pagar.
+export function nextSplitShare(order: Order, people: number) {
+  const paidCount = order.equalSplit?.paidCount || 0;
+  const paidAmount = order.equalSplit?.paidAmount || 0;
+  const remaining = round2(order.total - paidAmount);
+  const left = Math.max(1, people - paidCount);
+  return { remaining, left, amount: splitEqually(remaining, left)[0], part: paidCount + 1 };
 }
 
 const generateOrderId = () => Math.random().toString(36).substr(2, 9);
@@ -330,6 +374,7 @@ export const useCartStore = create<CartState>((set, get) => ({
       const snap = await tx.get(ref);
       if (!snap.exists()) throw new Error('La cuenta ya fue cobrada o eliminada.');
       const order = clean(snap.data() as Order);
+      if (order.equalSplit) throw new Error('Esta cuenta se está pagando en partes iguales. Cobra lo que falta desde Separar Cuenta.');
 
       const subtotal = calcTotal(order.items);
       const discount = round2(Math.min(Math.max(0, payment.discount), subtotal));
@@ -358,6 +403,70 @@ export const useCartStore = create<CartState>((set, get) => ({
     return paid;
   },
 
+  paySplitShare: async (orderId, share, payment) => {
+    let paid: PaidOrder | null = null;
+
+    await runTransaction(db, async (tx) => {
+      const ref = doc(db, 'orders', orderId);
+      const snap = await tx.get(ref);
+      if (!snap.exists()) throw new Error('La cuenta ya fue cobrada o eliminada.');
+      const order = clean(snap.data() as Order);
+
+      const paidCount = order.equalSplit?.paidCount || 0;
+      const paidAmount = order.equalSplit?.paidAmount || 0;
+      if (share.people <= paidCount) throw new Error('Ya pagaron todas las personas.');
+      const { remaining, left, amount, part } = nextSplitShare(order, share.people);
+      if (remaining <= 0) throw new Error('Esta cuenta ya no tiene saldo pendiente.');
+      // Otro dispositivo cobró o cambió la cuenta mientras se capturaba este pago
+      if (amount !== share.amount) throw new Error('La cuenta cambió. Revisa el monto y vuelve a cobrar.');
+
+      const isLast = left === 1;
+      const tip = round2(Math.max(0, payment.tip));
+      const rest: Order = { ...order };
+      delete rest.equalSplit;
+
+      paid = clean<PaidOrder>({
+        ...rest,
+        id: `${order.id}-${part}`,
+        items: isLast ? order.items : [],
+        total: amount,
+        discount: 0,
+        tip,
+        tipPercent: payment.tipPercent,
+        paymentMethod: payment.method,
+        paidAt: Date.now(),
+        paidBy: currentUserName(),
+        cashTendered: payment.method === 'Efectivo' ? payment.cashTendered : undefined,
+        change: payment.method === 'Efectivo' ? payment.change : undefined,
+        splitPart: part,
+        splitOf: share.people,
+        splitAccountTotal: order.total,
+      });
+      tx.set(doc(db, 'paidOrders', paid.id), paid);
+
+      if (isLast) {
+        consumeStock(tx, order.items.filter(i => i.status === 'nuevo'));
+        tx.delete(ref);
+      } else {
+        const equalSplit: EqualSplit = { people: share.people, paidCount: part, paidAmount: round2(paidAmount + amount) };
+        tx.update(ref, { equalSplit });
+      }
+    });
+
+    return paid;
+  },
+
+  setSplitPeople: async (orderId, people) => {
+    await runTransaction(db, async (tx) => {
+      const ref = doc(db, 'orders', orderId);
+      const snap = await tx.get(ref);
+      if (!snap.exists()) return;
+      const split = (snap.data() as Order).equalSplit;
+      if (!split || people <= split.paidCount) return;
+      tx.update(ref, { equalSplit: { ...split, people } });
+    });
+  },
+
   splitOrder: async (originalOrderId, itemsToMove) => {
     const activeUser = useAuthStore.getState().activeUser;
     const newOrderId = generateOrderId();
@@ -367,6 +476,7 @@ export const useCartStore = create<CartState>((set, get) => ({
       const snap = await tx.get(ref);
       if (!snap.exists()) throw new Error('La cuenta ya no existe.');
       const originalOrder = clean(snap.data() as Order);
+      if (originalOrder.equalSplit) throw new Error('Esta cuenta ya se está pagando en partes iguales.');
       const newItems: CartItem[] = [];
 
       itemsToMove.forEach(moveRequest => {
@@ -396,6 +506,7 @@ export const useCartStore = create<CartState>((set, get) => ({
         items: newItems,
         total: calcTotal(newItems),
         createdAt: Date.now(),
+        splitFrom: originalOrder.id,
       };
       tx.set(doc(db, 'orders', newOrderId), clean(newOrder));
     });

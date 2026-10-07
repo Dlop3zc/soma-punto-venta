@@ -94,6 +94,10 @@ function writeReceipt(b: TicketWriter, order: PaidOrder, s: TicketSettings, opts
       b.pair('Descuento', `-${money(order.discount)}`);
     }
     b.bold(true).size(1, 2).pair('TOTAL', money(order.total)).size(1, 1).bold(false);
+    if (order.splitPart) {
+      b.line(`Pago en partes iguales: persona ${order.splitPart} de ${order.splitOf}`);
+      if (order.splitAccountTotal !== undefined) b.pair('Total de la cuenta', money(order.splitAccountTotal));
+    }
 
     if (order.tip) {
       b.pair(order.tipPercent ? `Propina (${order.tipPercent}%)` : 'Propina', money(order.tip));

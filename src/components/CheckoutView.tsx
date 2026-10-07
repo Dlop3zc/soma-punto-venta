@@ -4,7 +4,7 @@ import { usePrinterStore, selectCanPrint } from '../store/usePrinterStore';
 import { useState } from 'react';
 import { Printer, Trash2 } from 'lucide-react';
 import CheckoutModal from './CheckoutModal';
-import SplitBillModal from './SplitBillModal';
+import SplitBillModal, { type SplitMode } from './SplitBillModal';
 
 export default function CheckoutView() {
   const { orders, setActiveOrder, deleteEmptyOrder } = useCartStore();
@@ -14,6 +14,7 @@ export default function CheckoutView() {
   const [printingId, setPrintingId] = useState<string | null>(null);
   const [checkoutOrderId, setCheckoutOrderId] = useState<string | null>(null);
   const [splitBillOrderId, setSplitBillOrderId] = useState<string | null>(null);
+  const [splitMode, setSplitMode] = useState<SplitMode>('productos');
 
   // Consider all open accounts, filter if waiter
   const openOrders = activeUser?.role === 'waiter' 
@@ -25,8 +26,9 @@ export default function CheckoutView() {
     setCheckoutOrderId(orderId);
   };
 
-  const handleSplitBill = (orderId: string) => {
+  const handleSplitBill = (orderId: string, mode: SplitMode = 'productos') => {
     setActiveOrder(orderId);
+    setSplitMode(mode);
     setSplitBillOrderId(orderId);
   };
 
@@ -137,6 +139,14 @@ export default function CheckoutView() {
                       <Printer size={20} /> {printingId === order.id ? 'Imprimiendo...' : 'Imprimir Pre-cuenta'}
                     </button>
                   )}
+                  {order.equalSplit ? (
+                    <button
+                      onClick={() => handleSplitBill(order.id, 'iguales')}
+                      className="w-full py-4 rounded-xl text-xl font-bold transition-colors flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white shadow-lg shadow-emerald-600/20"
+                    >
+                      <span>💳</span> Cobrar partes ({order.equalSplit.paidCount}/{order.equalSplit.people} pagaron)
+                    </button>
+                  ) : (
                   <button
                     onClick={() => handleCheckout(order.id)}
                     disabled={order.items.length === 0}
@@ -148,6 +158,7 @@ export default function CheckoutView() {
                   >
                     <span>💳</span> Cobrar Total
                   </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -164,6 +175,7 @@ export default function CheckoutView() {
 
       <SplitBillModal
         isOpen={!!splitBillOrderId}
+        initialMode={splitMode}
         onClose={() => setSplitBillOrderId(null)}
       />
     </div>
